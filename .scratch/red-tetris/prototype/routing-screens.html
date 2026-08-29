@@ -1,0 +1,454 @@
+<!doctype html>
+<!--
+  PROTOTYPE — jetable, à réagir. Question du ticket 07-prototype-routing-screens :
+  routing & écrans (/) formulaire de join ; /:room/:playerName écran unique lobby→running→over.
+  Trois variantes radicalement différentes, switchables via ?variant=B (flèches ← → au clavier).
+  Grid/flexbox only, pas de canvas, pas de SVG, pas de <table>. Assumes no framework on purpose.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype — routing & écrans red-tetris</title>
+<style>
+  :root {
+    --bg: #111318;
+    --panel: #1a1e27;
+    --panel2: #232836;
+    --line: #333a4d;
+    --ink: #e8ecf4;
+    --muted: #8a93a7;
+    --accent: #ff2d2d;
+    --ok: #00ff77;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); display: flex; flex-direction: column;
+    user-select: none;
+  }
+  .pill {
+    font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid transparent;
+  }
+  .pill.waiting  { color: #ffd000; border-color: rgba(255,208,0,.5); }
+  .pill.running  { color: var(--ok); border-color: rgba(0,255,119,.45); }
+  .pill.finished { color: var(--accent); border-color: rgba(255,45,45,.5); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px;
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .chip.dead { opacity: .45; }
+  .chip.dead .dot { background: var(--muted); }
+  .chip.host::after { content: "hôte"; font-size: 9px; color: var(--accent); border: 1px solid; border-radius: 4px; padding: 0 4px; }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(20, 1fr);
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+  }
+  .board .cell { background: #0c0e13; }
+  .board .cell.b { background: var(--cc); }
+  .board .cell.ghost { background: rgba(255,255,255,.06); }
+
+  .heap {
+    display: flex; gap: 2px; align-items: flex-end; height: 100%;
+  }
+  .heap .bar { flex: 1; background: var(--cc, var(--muted)); border-radius: 2px 2px 0 0; }
+
+  .btn {
+    font-weight: 700; font-size: 13px; letter-spacing: .04em;
+    padding: 9px 18px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--ink); cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .hint { font-size: 11px; color: var(--muted); }
+
+  /* ============ VARIANTE A — Coin arcade ============ */
+  .va { display: flex; flex-direction: column; height: 100%; }
+  .va nav {
+    display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .va nav .room { font-weight: 800; }
+  .va nav .spacer { flex: 1; }
+  .va main { flex: 1; display: flex; gap: 22px; justify-content: center; align-items: center; padding: 20px; }
+  .va .stage { display: flex; gap: 20px; align-items: flex-start; }
+  .va .boardwrap { position: relative; }
+  .va .banner {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px; z-index: 2;
+    background: rgba(10,12,16,.82); border-radius: 6px;
+  }
+  .va .banner strong { font-size: 18px; letter-spacing: .08em; }
+  .va .rail { display: flex; flex-direction: column; gap: 10px; width: 150px; }
+  .va .railitem { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .va .railitem.dead { opacity: .45; }
+  .va .railitem h4 { font-size: 12px; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .va .railitem .heapwrap { height: 64px; }
+  .va .hints { position: absolute; right: 22px; bottom: 14px; display: flex; flex-direction: column; gap: 4px; text-align: right; }
+
+  /* ============ VARIANTE B — Bureau spectateur ============ */
+  .vb { display: grid; grid-template-rows: auto auto 1fr auto; height: 100%; min-height: 100%; gap: 0; }
+  .vb header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .vb header .room { font-weight: 800; }
+  .vb header .spacer { flex: 1; }
+  .vb .scoreboard {
+    display: flex; gap: 12px; padding: 12px 20px; background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .vb .scorecard {
+    flex: 1; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .vb .scorecard.dead { opacity: .45; }
+  .vb .scorecard .row { display: flex; justify-content: space-between; align-items: center; }
+  .vb .scorecard .heapwrap { height: 54px; background: #0c0e13; border-radius: 6px; padding: 4px; }
+  .vb .gridrow { flex: 1; display: flex; justify-content: center; align-items: center; gap: 28px; padding: 18px 24px; overflow: auto; }
+  .vb .sidepanel { width: 210px; display: flex; flex-direction: column; gap: 14px; }
+  .vb .sidepanel .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .vb .queue { display: flex; flex-direction: column; gap: 6px; }
+  .vb .queue .piece { height: 14px; border-radius: 3px; background: var(--cc, var(--panel2)); }
+  .vb .actions {
+    display: flex; align-items: center; gap: 14px; padding: 12px 20px;
+    border-top: 1px solid var(--line); background: var(--panel);
+  }
+  .vb .actions .spacer { flex: 1; }
+  .vb .statusstrip { flex: 0 0 auto; width: 260px; font-size: 12px; color: var(--muted); }
+
+  /* ============ VARIANTE C — Arène côte à côte ============ */
+  .vc { display: flex; flex-direction: column; height: 100%; }
+  .vc header {
+    display: flex; align-items: center; gap: 16px; padding: 10px 20px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .vc header .room { font-weight: 800; }
+  .vc header .round { font-size: 12px; color: var(--muted); }
+  .vc header .spacer { flex: 1; }
+  .vc main { flex: 1; display: flex; justify-content: center; align-items: center; padding: 18px; }
+  .vc .arena { display: flex; align-items: center; gap: 26px; }
+  .vc .mini { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .vc .mini.dead .board { filter: grayscale(1); opacity: .35; }
+  .vc .mini .name { font-size: 11px; color: var(--muted); }
+  .vc .mini .tag {
+    font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+    background: rgba(255,45,45,.12); padding: 2px 8px; border-radius: 999px;
+  }
+  .vc .own .board { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .vc footer { display: flex; justify-content: center; gap: 12px; padding: 12px; border-top: 1px solid var(--line); }
+  .vc .mini .miniheap { width: 72px; height: 44px; }
+
+  /* Switcher */
+  .prototype-bar {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 50;
+    display: flex; align-items: center; gap: 12px;
+    background: #0c0e13; border: 1px solid #4a5470; border-radius: 999px; padding: 6px 14px;
+    font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  }
+  .prototype-bar button {
+    background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; line-height: 1;
+  }
+  .prototype-bar .label { min-width: 210px; text-align: center; color: var(--ink); font-weight: 600; }
+  .prototype-bar .keyhint { font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div class="prototype-bar">
+  <button id="prev" type="button" aria-label="Variante précédente">&#9664;</button>
+  <span class="label" id="variant-label">&#160;</span>
+  <button id="next" type="button" aria-label="Variante suivante">&#9654;</button>
+  <span class="keyhint">&#8592; &#8594;</span>
+</div>
+
+<script>
+(function () {
+  'use strict'
+
+  // Question: à quoi ressemble l'écran unique /:room/:playerName traversant lobby→running→over ?
+  // Status de démo : running. Le mapping des états est décrit dans la résolution du ticket.
+
+  var VARIANTS = ['A', 'B', 'C']
+  var NAMES = { A: 'Coin arcade', B: 'Bureau spectateur', C: 'Arène côte à côte' }
+  var LABELS = { A: 'A — Coin arcade', B: 'B — Bureau spectateur', C: 'C — Arène côte à côte' }
+  var PIECES = {
+    I: '#00e5ff', O: '#ffd000', T: '#b000ff', S: '#00ff77',
+    Z: '#ff2d2d', J: '#2d7fff', L: '#ff8c00',
+  }
+
+  var FIXTURE = {
+    room: 'salle-42',
+    round: 1,
+    status: 'running',                // 'waiting' | 'running' | 'finished'
+    self: { name: 'warol52', isHost: false, alive: true },
+    players: [
+      { name: 'alice', isHost: true,  alive: true  },
+      { name: 'bob',   isHost: false, alive: true  },
+      { name: 'charlie', isHost: false, alive: false },
+    ],
+    queue: ['T', 'J', 'I'],
+  }
+
+  // Stack partagé (pièces identiques pour tous : la séquence est commune au room).
+  var STACK = (function () {
+    var rows = []
+    for (var r = 0; r < 20; r++) rows.push(new Array(10).fill(null))
+    var put = function (row, colStart, type, cells) {
+      cells.forEach(function (c) { if (c) rows[row][colStart + c - 1] = type })
+    }
+    // 4 lignes basses de remplissage
+    for (var c = 0; c < 10; c++) { rows[19][c] = 'O'; rows[18][c] = 'S'; rows[17][c] = 'Z' }
+    rows[18][0] = null; rows[17][5] = null
+    // décombres
+    rows[16][0] = 'J'; rows[16][1] = 'J'; rows[16][2] = 'J'
+    rows[15][0] = 'I'
+    rows[14][7] = 'L'; rows[14][8] = 'L'; rows[14][9] = 'L'
+    rows[13][0] = 'T'; rows[13][1] = 'T'; rows[13][2] = 'T'; rows[13][1] = 'T'
+    rows[12][8] = 'I'
+    rows[11][3] = 'S'; rows[11][4] = 'S'
+    // colonne de gauche haute (héroïsme)
+    rows[10][0] = 'I'; rows[9][0] = 'I'; rows[8][0] = 'I'
+    return rows
+  })().map(function (row) { return row.slice() })
+
+  var SPECTRUMS = { alice: [1,2,3,4,6,7,8,4,3,2], bob: [2,2,4,5,5,6,4,3,2,1], charlie: [3,4,4,5,6,7,5,3,2,2] }
+  var COLORS = { alice: '#2d7fff', bob: '#b000ff', charlie: '#8a93a7' }
+
+  function el(tag, cls, html) {
+    var n = document.createElement(tag)
+    if (cls) n.className = cls
+    if (html != null) n.innerHTML = html
+    return n
+  }
+  function textEl(tag, cls, txt) {
+    var n = document.createElement(tag)
+    if (cls) n.className = cls
+    n.textContent = txt
+    return n
+  }
+  function statusPill() {
+    return el('span', 'pill ' + FIXTURE.status,
+      FIXTURE.status === 'waiting' ? 'En attente' : FIXTURE.status === 'running' ? 'En cours' : 'Terminée')
+  }
+  function boardNode(scale) {
+    var cols = 10, rows = 20, size = Math.round(20 * scale)
+    var b = el('div', 'board')
+    b.style.gridTemplateColumns = 'repeat(' + cols + ', ' + size + 'px)'
+    b.style.gridTemplateRows = 'repeat(' + rows + ', ' + size + 'px)'
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var cell = el('div', 'cell')
+        var t = STACK[r][c]
+        if (t) { cell.classList.add('b'); cell.style.setProperty('--cc', PIECES[t]) }
+        b.appendChild(cell)
+      }
+    }
+    return b
+  }
+  function heapNode(name) {
+    var h = el('div', 'heap')
+    var heights = SPECTRUMS[name]
+    heights.forEach(function (k) {
+      var bar = el('div', 'bar')
+      bar.style.height = Math.round(k * 3) + 'px'
+      bar.style.setProperty('--cc', COLORS[name])
+      h.appendChild(bar)
+    })
+    return h
+  }
+
+  function hostButton() {
+    var b = el('button', 'btn primary')
+    if (FIXTURE.status === 'waiting') { b.textContent = 'Démarrer la manche' }
+    else if (FIXTURE.status === 'finished') { b.textContent = 'Rejouer' }
+    else { b.textContent = 'En cours…'; b.disabled = true }
+    return b
+  }
+
+  /* ---------- A — Coin arcade ---------- */
+  function variantA() {
+    var root = el('div', 'va')
+
+    var nav = el('nav')
+    nav.appendChild(textEl('span', 'room', 'salle-42'))
+    nav.appendChild(statusPill())
+    nav.appendChild(el('span', 'spacer'))
+    nav.appendChild(textEl('span', 'hint', '3 joueurs connectés'))
+    nav.appendChild(hostButton())
+    root.appendChild(nav)
+
+    var main = el('main')
+    var stage = el('div', 'stage')
+    var wrap = el('div', 'boardwrap')
+    wrap.appendChild(boardNode(1))
+    main.appendChild(stage)
+    stage.appendChild(wrap)
+    root.appendChild(main)
+
+    var rail = el('div', 'rail')
+    FIXTURE.players.forEach(function (p) {
+      var item = el('div', 'railitem' + (p.alive ? '' : ' dead'))
+      var h4 = el('div')
+      h4.style.display = 'flex'; h4.style.justifyContent = 'space-between'
+      h4.appendChild(textEl('span', '', p.name + (p.isHost ? ' ★' : '')))
+      h4.appendChild(textEl('span', 'hint', p.alive ? 'en jeu' : 'éliminé'))
+      item.appendChild(h4)
+      var hw = el('div', 'heapwrap'); hw.appendChild(heapNode(p.name))
+      item.appendChild(hw)
+      rail.appendChild(item)
+    })
+    stage.appendChild(rail)
+
+    var hints = el('div', 'hints')
+    hints.style.position = 'absolute'; hints.style.right = '22px'; hints.style.bottom = '14px'
+    hints.appendChild(el('div', '', '&#8592; &#8594; rotation  &#8595; descente  &#9251; chute'))
+    root.appendChild(hints)
+    return root
+  }
+
+  /* ---------- B — Bureau spectateur ---------- */
+  function variantB() {
+    var root = el('div', 'vb')
+
+    var header = el('header')
+    header.appendChild(textEl('span', 'room', 'salle-42'))
+    header.appendChild(statusPill())
+    header.appendChild(el('span', 'spacer'))
+    FIXTURE.players.forEach(function (p) {
+      var chip = el('span', 'chip' + (p.isHost ? ' host' : '') + (p.alive ? '' : ' dead'))
+      chip.appendChild(el('span', 'dot'))
+      chip.appendChild(textEl('span', '', p.name))
+      header.appendChild(chip)
+    })
+    root.appendChild(header)
+
+    var score = el('div', 'scoreboard')
+    FIXTURE.players.forEach(function (p) {
+      var card = el('div', 'scorecard' + (p.alive ? '' : ' dead'))
+      var row = el('div', 'row')
+      row.appendChild(textEl('span', '', p.name + (p.isHost ? ' ★' : '')))
+      row.appendChild(textEl('span', 'hint', p.alive ? 'en jeu' : 'éliminé'))
+      card.appendChild(row)
+      var hw = el('div', 'heapwrap'); hw.appendChild(heapNode(p.name))
+      card.appendChild(hw)
+      score.appendChild(card)
+    })
+    root.appendChild(score)
+
+    var grid = el('div', 'gridrow')
+    grid.appendChild(boardNode(1))
+    var side = el('div', 'sidepanel')
+    var qP = el('div', 'panel')
+    qP.appendChild(textEl('div', 'hint', 'Prochaines pièces'))
+    var q = el('div', 'queue')
+    FIXTURE.queue.forEach(function (t) {
+      var p = el('div', 'piece')
+      p.style.setProperty('--cc', PIECES[t])
+      q.appendChild(p)
+    })
+    qP.appendChild(q)
+    side.appendChild(qP)
+    var sP = el('div', 'panel')
+    sP.appendChild(textEl('div', 'hint', 'Manche ' + FIXTURE.round))
+    sP.appendChild(el('div', 'hint', 'Script standard SRS · gravité 500 ms'))
+    side.appendChild(sP)
+    grid.appendChild(side)
+    root.appendChild(grid)
+
+    var actions = el('div', 'actions')
+    actions.appendChild(el('span', 'statusstrip', FIXTURE.status === 'waiting' ? 'Le host peut lancer la manche.' : FIXTURE.status === 'finished' ? 'Manche terminée. Le vainqueur est : alice.' : 'Tapez vos directions pour guider la pièce.'))
+    actions.appendChild(el('span', 'spacer'))
+    var b = hostButton()
+    actions.appendChild(b)
+    root.appendChild(actions)
+    return root
+  }
+
+  /* ---------- C — Arène côte à côte ---------- */
+  function variantC() {
+    var root = el('div', 'vc')
+
+    var header = el('header')
+    header.appendChild(textEl('span', 'room', 'salle-42'))
+    header.appendChild(textEl('span', 'round', 'Manche ' + FIXTURE.round))
+    header.appendChild(el('span', 'spacer'))
+    header.appendChild(statusPill())
+    root.appendChild(header)
+
+    var main = el('main')
+    var arena = el('div', 'arena')
+
+    FIXTURE.players.forEach(function (p, idx) {
+      var isSelf = idx === 0
+      var mini = el('div', 'mini' + (p.alive ? '' : ' dead') + (isSelf ? ' own' : ''))
+      var name = el('div', 'name')
+      name.textContent = p.name + (p.isHost ? ' ★' : '') + (isSelf ? ' (vous)' : '')
+      mini.appendChild(name)
+      if (isSelf) {
+        mini.appendChild(boardNode(1))
+      } else {
+        var mh = el('div', 'miniheap'); mh.appendChild(heapNode(p.name)); mini.appendChild(mh)
+        if (!p.alive) {
+          var tag = el('span', 'tag'); tag.textContent = 'Éliminé — spectateur'
+          mini.appendChild(tag)
+        }
+      }
+      arena.appendChild(mini)
+    })
+    main.appendChild(arena)
+    root.appendChild(main)
+
+    var footer = el('footer')
+    footer.appendChild(hostButton())
+    footer.appendChild(el('span', 'hint', 'Règles — pièces identiques pour tous, gravité unifiée.'))
+    root.appendChild(footer)
+    return root
+  }
+
+  var RENDERERS = { A: variantA, B: variantB, C: variantC }
+
+  var stage = document.getElementById('stage')
+  var label = document.getElementById('variant-label')
+
+  function render(variant) {
+    stage.innerHTML = ''
+    stage.appendChild(RENDERERS[variant]())
+    label.textContent = LABELS[variant]
+  }
+  function setVariant(v) {
+    if (VARIANTS.indexOf(v) === -1) v = 'A'
+    render(v)
+    var url = new URL(window.location)
+    url.searchParams.set('variant', v)
+    try { history.replaceState(null, '', url) } catch (e) { /* file:// : le param reste via le hash-lecture */ }
+  }
+  function cycle(dir) {
+    var cur = VARIANTS.indexOf(new URL(window.location).searchParams.get('variant') || 'A')
+    var next = (cur + dir + VARIANTS.length) % VARIANTS.length
+    setVariant(VARIANTS[next])
+  }
+  function interactable(t) {
+    return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+  }
+
+  document.getElementById('next').addEventListener('click', function () { cycle(1) })
+  document.getElementById('prev').addEventListener('click', function () { cycle(-1) })
+  document.addEventListener('keydown', function (e) {
+    if (interactable(e.target)) return
+    if (e.key === 'ArrowLeft') cycle(-1)
+    if (e.key === 'ArrowRight') cycle(1)
+  })
+
+  setVariant(new URL(window.location).searchParams.get('variant') || 'A')
+})()
+</script>
+</body>
+</html>
