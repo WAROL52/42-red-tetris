@@ -63,7 +63,6 @@ class Game {
   }
 
   addPlayer(name: string, socketId: string): Player {
-    console.log("addPlayer",{name,socketId});
     const wasEmpty = this.playerCount() === 0
     const player = new Player(name, socketId, wasEmpty)
     this.players.set(socketId, player)
@@ -73,7 +72,7 @@ class Game {
     return player
   }
   getPlayerByName(name: string){
-    for (const [socketId,player] of this.players) {
+    for (const player of this.players.values()) {
       if(player.name===name) return  player;
     }
     return null;

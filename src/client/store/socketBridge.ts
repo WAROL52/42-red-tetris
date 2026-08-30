@@ -47,13 +47,17 @@ export function createSocketBridge(url: string, handlers: BridgeHandlers): Socke
 
   return {
     emit: (event, ...args) => {
-      console.trace("[WS event]:",event,args);
       socket.emit(event, ...args)
     },
     close: () => {
-      if(!socket.connected) return;
-      console.trace("[WS event]:","self disconnecting...");
-      socket.disconnect()
+      if (socket.connected) {
+        socket.disconnect()
+        return
+      }
+      // Still establishing the transport: aborting mid-handshake trips the
+      // dev WS proxy (write EPIPE). Wait for the handshake to complete, then
+      // close cleanly — the socket never emits `join`, so no player lingers.
+      socket.once('connect', () => socket.disconnect())
     },
   }
 }

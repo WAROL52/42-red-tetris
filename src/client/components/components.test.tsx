@@ -30,15 +30,15 @@ describe('BoardView', () => {
 describe('SpectrumView', () => {
   it('shows one bar per column and the player name', () => {
     const { container } = render(
-      <SpectrumView name="bob" spectrum={[1, 2, 3, 4, 5, 6, 7, 8, 9, 0]} eliminated={false} />,
+      <SpectrumView name="bob" id="s1" spectrum={[1, 2, 3, 4, 5, 6, 7, 8, 9, 0]} eliminated={false} />,
     )
     expect(container.querySelectorAll('.spectrum-fill')).toHaveLength(10)
     expect(screen.getByText('bob')).toBeTruthy()
   })
 
   it('flags eliminated players', () => {
-    render(<SpectrumView name="bob" spectrum={[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]} eliminated={true} />)
-    expect(screen.getByText('bob ✝')).toBeTruthy()
+    render(<SpectrumView name="bob" id="s1" spectrum={[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]} eliminated={true} />)
+    expect(screen.getByText('bob ❌')).toBeTruthy()
   })
 })
 

@@ -90,7 +90,6 @@ function Field() {
 function Opponents() {
   const { state } = useStore()
   const others = state.players.filter((p) => p.name !== state.playerName)
-  console.log(others);
   
   return (
     <div className="opponents">
@@ -126,8 +125,6 @@ function GameScreenInner() {
 
 export function GameScreen() {
   const { room = '', playerName = '' } = useParams()
-  console.log({room,playerName});
-  
   if (!playerName.trim().length || !room.trim().length) {
     return <Navigate to="/" replace />
   }

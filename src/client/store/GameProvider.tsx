@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from 'react'
 import { initialState, reducer, type Action, type RootState } from './reducer.ts'
 import { createSocketBridge, type BridgeHandlers, type SocketBridge } from './socketBridge.ts'
 import { spectrum as engineSpectrum } from '../engine/engine.ts'
@@ -57,7 +57,7 @@ export function GameProvider({ room, playerName, url = '', bridgeFactory, childr
       onPenalty: ({ lines }) => dispatch({ type: 'OPPONENT_LINES', payload: { count: lines } }),
       onGameOver: (payload) => dispatch({ type: 'GAME_OVER', payload }),
       onError: (e) => {
-        console.log("[WS Error]:",e);
+        console.error(e)
       },
     })
     bridgeRef.current = bridge
