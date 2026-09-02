@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0005 — Le serveur · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Le serveur (<code>domain.ts</code> + <code>socket.ts</code>)</h1>
+  <p class="subtitle">Leçon 0005 · 15 min · ouvrir <code>src/server/</code> en parallèle</p>
+
+  <p>
+    Le serveur a une structure <em>exactement inverse</em> du client. Là où le
+    client est fonctionnel (fonctions pures + reducer), le serveur est
+    <strong>objet</strong> : deux classes <code>Player</code> et <code>Game</code>
+    qui utilisent <code>this</code> (c'est l'un des seuls endroits où c'est
+    autorisé — la spec l'impose).
+  </p>
+
+  <h2>1. Pourquoi des prototypes côté serveur</h2>
+  <p>
+    Le sujet dit textuellement: « <em>server OOP via prototypes (Player, Piece,
+    Game classes)</em> ». C'est l'endroit où on accepte le <code>this</code>,
+    parce qu'on <em>muté</em> délibérément l'état du jeu. Cette mutation est
+    encapsulée derrière des méthodes (<code>addPlayer</code>, <code>start</code>,
+    <code>topOut</code>) qui sont les <em>seules</em> à toucher aux champs.
+  </p>
+
+  <div class="callout callout--key">
+    <strong>Asymétrie volontaire</strong>
+    Client = pur (immutable, testable sans React). Serveur = OOP (mutable,
+    state machine de la partie). Le pont entre les deux, c'est le protocole.
+  </div>
+
+  <h2>2. <code>Player</code> — un humain connecté</h2>
+  <pre><code>class Player {
+  readonly name: string
+  readonly socketId: string
+  isHost: boolean              // mutable
+  eliminated: boolean          // mutable
+  spectrum: number[]           // mutable (dernier spectre reçu)
+  nextIndex: number            // mutable (position dans la séquence partagée)
+
+  constructor(name, socketId, isHost = false) { /* ... */ }
+}</code></pre>
+
+  <p>Les champs mutables sont <em>quatre</em>. Tout le reste est figé à la création.</p>
+
+  <ul>
+    <li><code>isHost</code> — bascule quand l'host quitte (réélection).</li>
+    <li><code>eliminated</code> — passe à <code>true</code> après <code>topOut</code>, remis à <code>false</code> à chaque nouveau round.</li>
+    <li><code>spectrum</code> — la dernière valeur reçue via <code>lock</code>/<code>linesCleared</code>/<code>spectrumHeartbeat</code>.</li>
+    <li><code>nextIndex</code> — sa position dans la séquence de pièces 7-bag. Avance quand <code>pieceFor()</code> est appelé.</li>
+  </ul>
+
+  <h2>3. <code>Game</code> — la room</h2>
+  <p>
+    <code>Game</code> est une machine à états très lisible. Voici les transitions:
+  </p>
+  <div class="diagram">
+<div class="col">
+<h4>État waiting</h4>
+players.add() admis
+start() →
+  running
+hostId ≠ null
+</div>
+<div class="col">
+<h4>État running</h4>
+join() refusé
+pieceFor() actif
+topOut() →
+  eliminated
+aliveCount ≤ 1 →
+  finished
+</div>
+<div class="col">
+<h4>État finished</h4>
+join() réadmis
+restart() →
+  running
+round++
+players.reset()
+</div>
+  </div>
+
+  <h3>3.1 Le compteur <code>round</code></h3>
+  <p>
+    <code>round</code> s'incrémente à chaque <code>beginRound()</code>. Il sert
+    principalement à invalider les caches côté client (par exemple
+    <code>useEffect([round])</code>) quand la partie redémarre.
+  </p>
+
+  <h3>3.2 La séquence partagée (7-bag)</h3>
+  <pre><code>private sequence: PieceKind[]
+private ensureSequence(length: number): void {
+  while (this.sequence.length < length) {
+    this.sequence.push(...shuffle(BAG))   // mélange Fisher-Yates
+  }
+}</code></pre>
+  <p>
+    Chaque joueur a son <code>nextIndex</code> propre, mais tout le monde
+    consomme la <em>même</em> <code>sequence</code>. Résultat : Alice à l'index
+    7 et Bob à l'index 12 reçoivent rigoureusement les mêmes pièces 8, 9, 10, …
+  </p>
+  <p>
+    Le mélange utilise <code>Math.random()</code> — donc le serveur n'est pas
+    déterministe par défaut. C'est volontaire (le serveur n'a pas à être testé
+    au pixel près), mais ça interdit un test « bit-exact » des pièces sans stub.
+  </p>
+
+  <h3>3.3 La règle unifiée de fin de manche</h3>
+  <p>
+    Deux endroits seulement déclenchent <code>finished + gameOver</code>:
+  </p>
+  <ul>
+    <li><code>Game.topOut(socketId)</code> — quand un joueur se tue.</li>
+    <li><code>removePlayer()</code> dans <code>socket.ts</code> — quand un joueur part en pleine manche (si son départ fait passer <code>aliveCount</code> à ≤ 1).</li>
+  </ul>
+  <p>
+    Cette unification (introduite au ticket 06 de la map) corrige un bug
+    historique du squelette où le départ d'un joueur en cours de manche
+    n'arrêtait pas la partie.
+  </p>
+
+  <h2>4. <code>socket.ts</code> — l'aiguillage</h2>
+  <p>
+    Le fichier <code>socket.ts</code> est <em>fin</em>: il ne contient pas de
+    logique métier, juste le câblage entre événements socket et méthodes du
+    domaine. Pattern récurrent:
+  </p>
+  <pre><code>socket.on('topOut', () => {
+  const game = requireGame(socket.id)
+  const player = currentPlayer(game, socket.id)
+  if (game === null || game.status !== 'running' || player === undefined || player.eliminated) {
+    return   // no-op silencieux
+  }
+  io.to(game.room).emit('playerEliminated', { playerName: player.name })
+  const result = game.topOut(socket.id)
+  if (result !== null) {
+    io.to(game.room).emit('gameOver', { winner: result.winner })
+    io.to(game.room).emit('state', roomState(game))
+  }
+})</code></pre>
+
+  <p>Trois étapes systématiques:</p>
+  <ol>
+    <li><strong>Résoudre le contexte</strong> (<code>requireGame</code> + <code>currentPlayer</code>).</li>
+    <li><strong>Valider l'état</strong> (phase correcte, joueur pas éliminé, payload valide via <code>isValidSpectrum</code>).</li>
+    <li><strong>Mutate le domaine + broadcaster</strong>.</li>
+  </ol>
+
+  <h2>5. Le multi-salles et le nettoyage</h2>
+  <pre><code>const games = new Map<string, Game>()
+
+// Quand le dernier joueur part :
+if (game.playerCount() === 0) {
+  io.in(game.room).disconnectSockets()
+  games.delete(game.room)
+}</code></pre>
+  <p>
+    Chaque nom de room est une clé du <code>Map</code>. Une room vide est
+    immédiatement supprimée, donc les parties orphelines ne s'accumulent pas en
+    mémoire. C'est la solution « multi-salles concurrentes » du sujet.
+  </p>
+
+  <h2>6. <code>removePlayer</code> — le cas special</h2>
+  <p>
+    <code>removePlayer</code> est la seule fonction qui n'est pas un handler
+    direct — elle est appelée depuis <code>leave</code> et <code>disconnect</code>.
+    Elle cumule quatre responsabilités:
+  </p>
+  <ol>
+    <li>Retire le joueur du <code>Game.players</code>.</li>
+    <li>Réélit un host si nécessaire (<code>Game.removePlayer</code>).</li>
+    <li>Supprime la room si elle devient vide.</li>
+    <li>Si la manche est <code>running</code> et qu'il ne reste qu'un survivant, termine la manche.</li>
+  </ol>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    <a href="https://socket.io/docs/v4/rooms/">Socket.IO — Rooms</a>
+    pour comprendre <code>socket.join()</code>, <code>io.to(room).emit()</code>,
+    <code>socket.to(room).emit()</code> (broadcast sauf à l'émetteur) et
+    <code>io.in(room).disconnectSockets()</code>.
+  </div>
+
+  <h2>7. Anti-patterns à éviter côté serveur</h2>
+  <ul>
+    <li><strong>Ne pas accumuler de pénalités.</strong> Le squelette avait <code>Player.penalty</code>/<code>queuePenalty</code> — c'est supprimé (cf. spec §4). Le serveur <em>relaye</em> <code>penalty {lines}</code>, il ne stocke pas.</li>
+    <li><strong>Ne pas valider un <code>spectrum</code> sans <code>isValidSpectrum</code>.</strong> Risque d'index out-of-bounds côté client distant.</li>
+    <li><strong>Ne pas émettre <code>gameStarted</code> sans avoir <code>beginRound()</code></strong>. Sinon la room est <code>running</code> sans avoir incrémenté <code>round</code> et les clients ne se reset pas.</li>
+  </ul>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien de classes OOP y a-t-il dans <code>domain.ts</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> Une (<code>Game</code> uniquement).</label>
+      <label><input type="radio" name="q1" value="b"> Deux (<code>Player</code> et <code>Game</code>).</label>
+      <label><input type="radio" name="q1" value="c"> Trois (<code>Player</code>, <code>Piece</code>, <code>Game</code>).</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Le sujet mentionne <code>Piece</code> comme « classe » mais en pratique, <code>Piece</code> n'existe pas comme type runtime côté serveur — la pièce est un <code>PieceKind</code> (string union) et c'est le client qui gère sa position via <code>FallingPiece</code>. Côté serveur, on n'a besoin que de <code>Player</code> et <code>Game</code>.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que fait <code>Game.aliveCount()</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"> Renvoie le nombre total de joueurs dans la room.</label>
+      <label><input type="radio" name="q2" value="b"> Renvoie le nombre de joueurs non-éliminés (encore en course).</label>
+      <label><input type="radio" name="q2" value="c"> Renvoie le nombre de joueurs actuellement connectés.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>aliveCount()</code> compte les <code>Player</code> dont <code>eliminated === false</code>. C'est la métrique qui déclenche la fin de manche: dès qu'elle passe à ≤ 1 en cours de <code>running</code>, la partie passe en <code>finished</code>.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>Ouvre <code>domain.ts</code> et trace manuellement ces scénarios:</p>
+  <ul>
+    <li>Un joueur rejoint une room vide → que valent <code>hostId</code> et <code>isHost</code> ?</li>
+    <li>Ce joueur appelle <code>start()</code> en étant seul → quel est l'état final, et <code>winner</code> ?</li>
+    <li>Il clear 4 lignes en solo → combien de <code>penalty</code> sont envoyés et à qui ?</li>
+  </ul>
+  <p><em>Réponses : 1) hostId = socketId, isHost = true. 2) round=1, running, winner=null au gameOver. 3) Aucun (size > 1 guard : solo → personne à pénaliser).</em></p>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi <code>Math.random()</code> côté serveur mais
+    <code>mulberry32(seed)</code> côté client (pour le garbage) ? Pourquoi ne
+    pas rejouer les games en test « bit-exact » ? Le 7-bag a-t-il des
+    propriétés statistiques utiles à connaître ?
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0004-le-store-client.html">← Leçon 0004 — Le store client</a>
+    <a class="next" href="0006-l-assemblage.html">Leçon 0006 — L'assemblage →</a>
+  </nav>
+</main>
+</body>
+</html>

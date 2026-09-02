@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0008 — Rotation &amp; matrices · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+  <style>
+    .rot { display:inline-block; margin-right:1.4rem; }
+    .rot .rcell { width:24px; height:24px; display:inline-block; }
+    .rot .rcell.y { background:#9d6cff; }
+    .rot .rcell.n { background:#f3efe6; border:1px solid #eee9dd; }
+    .rotlabel { font-family:var(--mono); font-size:0.8em; color:var(--muted); text-align:center; margin-top:0.2rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Rotation &amp; algorithmes de matrices</h1>
+  <p class="subtitle">Leçon 0008 · 15 min · <strong>algorithme n°2</strong></p>
+
+  <p>
+    Une pièce peut prendre 4 orientations (états 0, 1, 2, 3). Le moteur stocke
+    chaque orientation comme une <em>matrice booléenne</em> (où les cases
+    <code>true</code> sont les minos). L'algorithme qui passe d'une orientation à
+    l'autre est une <strong>rotation de matrice de 90°</strong> — un classique
+    d'algorithmique qu'on retrouve partout (images, jeux, puzzles). Cette leçon
+    le décompose.
+  </p>
+
+  <h2>1. Pourquoi une matrice booléenne</h2>
+  <p>
+    La « forme » d'une pièce est abstraite et indépendante de sa position sur le
+    board. On la décrit par une petite grille carrée où <code>true</code> = bloc
+    présent:
+  </p>
+  <div class="rot">
+    <div id="s0"><script>('0,1|1,0|1,1|1,2').split('|').map(c=>c.split(',').map(Number)).forEach(([r,c])=>{});[0,1,2].forEach(r=>{document.write('<div>');[0,1,2].forEach(c=>document.write(`<span class="rcell ${((r===0&&c===1)||(r===1))?'y':'n'}"></span>`));document.write('</div>')})</script></div>
+    <div class="rotlabel">T · état 0</div>
+  </div>
+  <pre><code>SPAWN_SHAPES.T = [
+  [0, 1, 0],
+  [1, 1, 1],
+  [0, 0, 0],
+]</code></pre>
+  <p>
+    La pièce T spawn est une matrice 3×3. Les formes I et O sont des matrices
+    4×4 et 2×2 respectivement. Toutes les pièces stockent au moins
+    <code>SPAWN_SHAPES[type]</code>; les 3 autres orientations sont <em>calculées</em>
+    par rotation.
+  </p>
+
+  <h2>2. L'algorithme: rotation horaire de 90°</h2>
+  <p>
+    Le moteur définit une fonction <code>rotateCW(shape)</code> qui prend une
+    matrice carrée booléenne et renvoie sa version tournée de 90° dans le sens
+    horaire (CW). C'est la <em>seule</em> primitive de rotation nécessaire — les
+    états 2 (180°) et 3 (270°) s'obtiennent en l'appliquant 2 puis 3 fois.
+  </p>
+  <pre><code>function rotateCW(shape) {
+  const n = shape.length
+  const out = Array.from({ length: n }, () => new Array(n).fill(false))
+  for (let r = 0; r &lt; n; r++)
+    for (let c = 0; c &lt; n; c++)
+      out[c][n - 1 - r] = shape[r][c]
+  return out
+}</code></pre>
+
+  <h3>2.1 La formule, expliquée</h3>
+  <p>Pour une matrice carrée n×n, le point à <code>(r, c)</code> (ligne, colonne) part vers:</p>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Opération</th>
+        <th style="padding:0.4rem 0.6rem">Formule</th>
+        <th style="padding:0.4rem 0.6rem">Intuition</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Rotation horaire 90°</td><td><code>[c][n-1-r]</code></td><td>La colonne devient ligne inversée.</td></tr>
+      <tr><td>Rotation anti-horaire 90°</td><td><code>[n-1-c][r]</code></td><td>Variante utilisée ailleurs.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Le secret: une rotation de 90° envoie chaque cellule <code>(r, c)</code> vers
+    <code>(c, n-1-r)</code>. On <em>inverse</em> les rôles ligne/colonne, et on
+    inverse la nouvelle colonne. C'est la formule à retenir, pas le raisonnement.
+  </p>
+
+  <h3>2.2 Démonstration sur la pièce T</h3>
+  <div class="rot">
+    <div><script>[0,1,2].forEach(r=>{document.write('<div>');[0,1,2].forEach(c=>document.write(`<span class="rcell ${((r===0&&c===1)||(r===1))?'y':'n'}"></span>`));document.write('</div>')})</script></div>
+    <div class="rotlabel">état 0</div>
+  </div>
+  <div class="rot">→ CW →</div>
+  <div class="rot">
+    <div><script>[[0,0,1],[0,1,1],[0,0,1]].forEach(r=>{document.write('<div>');r.forEach(v=>document.write(`<span class="rcell ${v?'y':'n'}"></span>`));document.write('</div>')})</script></div>
+    <div class="rotlabel">état 1</div>
+  </div>
+  <p>
+    Vérifions un point: le mino <code>(0,1)</code> (le « haut » du T). Avec la
+    formule CW: <code>r=0, c=1, n=3</code> → destination
+    <code>[c=1][n-1-r=2]</code> = <code>(1, 2)</code>. Et en effet, dans l'état 1,
+    il y a un mino à <code>(1, 2)</code>. ✓
+  </p>
+
+  <h2>3. Génération des 4 états — <code>SHAPES</code></h2>
+  <pre><code>export const SHAPES = Object.fromEntries(
+  Object.entries(SPAWN_SHAPES).map(([type, spawn]) => {
+    const states = [spawn]                    // état 0 = spawn
+    for (let i = 1; i &lt; 4; i++)
+      states.push(rotateCW(states[i-1]))      // 180°, 270°
+    return [type, states]
+  })
+)
+// SHAPES['T'] = [état0, état1, état2, état3]
+// SHAPES['T'][state] = matrice booléenne
+</code></pre>
+  <p>
+    L'état 1 est calculé une fois, puis l'état 2 = <code>rotateCW(état1)</code>
+    (donc 180°), l'état 3 = <code>rotateCW(état2)</code> (donc 270°). Le tout est
+    <em>précalculé</em> au chargement du module — pas recalculé à chaque frame.
+  </p>
+
+  <div class="callout callout--key">
+    <strong>Invariant essentiel</strong>
+    <code>SHAPES[type][state]</code> est une <code>boolean[][]</code> carrée dont
+    la taille <code>n</code> vaut 4 (I), 3 (JLSTZ) ou 2 (O). Le nombre de minos
+    est <em>invariant</em> par rotation: une pièce a toujours 4 blocs, peu importe
+    l'état. La rotation ne change que leur <em>position</em>, pas leur <em>nombre</em>.
+  </div>
+
+  <h2>4. La pièce O — l'identité</h2>
+  <p>
+    La pièce O (le carré 2×2) est un cas particulier: dans le système SRS, elle
+    ne tourne <em>pas</em> visuellement. <code>rotate()</code> le gère en ne
+    proposant <em>aucun</em> kick pour O (nous verrons en leçon 0009). Sa matrice
+    2×2 est symétrique par rotation, donc son apparition ne change pas non plus.
+    Le moteur la représente, mais <code>rotate(pièce O)</code> la laisse intacte
+    (test <code>engine.test.ts:152</code>).
+  </p>
+
+  <h2>5. Où la rotation s'arrête — <code>rotate()</code></h2>
+  <p>
+    <code>rotate()</code> (leçon 0009) ne fait <em>pas</em> que tourner la matrice:
+    il essaie d'appliquer un décalage (kick) pour rendre la rotation <em>valide</em>
+    face aux obstacles. La partie <em>matricielle</em> se résume à:
+  </p>
+  <pre><code>const to = (p.state + 1) % 4     // état suivant (CW)
+// puis, pour chaque kick candidat:
+if (!collides(board, type, to, x+kick.dx, y+kick.dy))
+  → position valide, on s'arrête</code></pre>
+  <p>
+    C'est <code>rotateCW</code> + <code>SHAPES</code> qui fournissent la <em>forme</em>
+    de l'état <code>to</code>; les wall-kicks déplacent le point d'ancrage
+    pour que cette forme tienne dans le board.
+  </p>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    Non, pas un site externe cette fois — la référence de référence pour la forme
+    des pièces et la rotation SRS est
+    <a href="https://tetris.wiki/Super_Rotation_System">Tetris Wiki — SRS</a>.
+    Et dans le code, <code>rotateCW</code> vit à
+    <a href="../src/client/engine/engine.ts">engine.ts:84</a>, <code>SHAPES</code>
+    à <a href="../src/client/engine/engine.ts">engine.ts:96</a>.
+  </div>
+
+  <h2>6. Complexité</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Opération</th>
+        <th style="padding:0.4rem 0.6rem">Complexité</th>
+        <th style="padding:0.4rem 0.6rem">Quand</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>rotateCW(shape)</code></td><td>O(n²) avec n ≤ 4</td><td>une fois, au chargement (génère SHAPES)</td></tr>
+      <tr><td>Lecture <code>SHAPES[type][state]</code></td><td>O(1)</td><td>à chaque frame / collision</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Grâce au pré-calcul de <code>SHAPES</code>, la rotation <em>pendant le jeu</em>
+    est O(1) pour récupérer la forme. Le calcul O(n²) n'a lieu qu'une seule fois
+    au démarrage — un bel exemple de « payer le coût avant, pas pendant ».
+  </p>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Dans <code>rotateCW</code>, où part la cellule <code>[r][c]</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"><code>[n-1-r][c]</code></label>
+      <label><input type="radio" name="q1" value="b"><code>[c][n-1-r]</code></label>
+      <label><input type="radio" name="q1" value="c"><code>[r][n-1-c]</code></label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>[c][n-1-r]</code>. La colonne c devient la ligne, et la colonne cible est inversée (n-1-r). C'est la formule classique de rotation horaire 90°.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Quand <code>rotateCW</code> est-il appelé <em>pendant le jeu</em> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">À chaque pression de <code>↑</code>.</label>
+      <label><input type="radio" name="q1" value="b">Une seule fois, au chargement (pré-calcul de SHAPES).</label>
+      <label><input type="radio" name="q1" value="c">À chaque repaint, via rAF.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>rotateCW</code> est exécuté une seule fois, au chargement, pour générer états 1,2,3 dans <code>SHAPES</code>. Pendant le jeu, la rotation <em>lit</em> <code>SHAPES[type][state]</code> (O(1)) et n'appelle plus <code>rotateCW</code>.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>
+    Sans regarder le code, déduis <code>SHAPES['L'][1]</code> depuis l'état 0 de L:
+  </p>
+  <pre><code>L état 0 (3×3):
+  0 0 1
+  1 1 1
+  0 0 0</code></pre>
+  <ul>
+    <li>Applique la formule <code>[c][n-1-r]</code> à chaque mino.</li>
+    <li>Le mino <code>(0,2)</code> va où ? <em>(r=0,c=2 → [2][2], tout en bas à droite.)</em></li>
+    <li>Dessine le résultat final. Re-croise avec <code>engine.test.ts:58</code> (<code>SPAWN_MINOS.L</code> est l'état 0; compare avec l'état 1 logique).</li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi la formule de rotation change-t-elle si on veut une rotation
+    anti-horaire ? Comment représenterait-on une pièce qui pourrait pivoter d'un
+    angle non multiple de 90° ? La pré-génération de <code>SHAPES</code> te
+    semble-t-elle le bon point de découpe ? Pose-moi tes questions.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0007-fondations-board-collision.html">← Leçon 0007 — Fondations</a>
+    <a class="next" href="0009-srs-wall-kicks.html">Leçon 0009 — SRS wall-kicks →</a>
+  </nav>
+</main>
+</body>
+</html>

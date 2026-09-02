@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0002 — Le moteur pur (engine.ts) · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Le moteur pur (engine.ts)</h1>
+  <p class="subtitle">Leçon 0002 · 15 min · avoir ouvert <code>src/client/engine/engine.ts</code></p>
+
+  <p>
+    Cette leçon ouvre le cœur du jeu: <code>src/client/engine/engine.ts</code>.
+    C'est un fichier <em>pur</em>: pas de <code>this</code>, pas de DOM, pas de
+    réseau, pas de <code>Date.now()</code> qui traîne. Tout est fonction qui prend
+    un <code>GameState</code> et en rend un autre. On va voir <em>pourquoi</em>,
+    <em>comment</em>, et lire les sept fonctions qui font tout le travail.
+  </p>
+
+  <h2>1. Pourquoi « pur » est non négociable</h2>
+  <p>
+    La pureté (même entrée → même sortie, aucun effet de bord) permet trois choses
+    que le Tetris exige:
+  </p>
+  <ul>
+    <li><strong>Déterminisme</strong>: on peut injecter un rng dans les tests pour rejouer une partie identique.</li>
+    <li><strong>Tests triviaux</strong>: pas besoin de monter un DOM ou un socket pour vérifier qu'une rotation kick correctement.</li>
+    <li><strong>Prévisibilité côté React</strong>: le reducer peut appeler ces fonctions en toute sécurité — React compare les références, et l'immutabilité rend ça gratuit.</li>
+  </ul>
+
+  <div class="callout callout--key">
+    <strong>La signature d'or</strong>
+    <pre><code>(state: GameState, ...args) => GameState</code></pre>
+    À quelques exceptions près (<code>clearLines</code> renvoie aussi le nombre de
+    lignes), toutes les fonctions du moteur ont cette forme.
+  </div>
+
+  <h2>2. Les constantes spatiales: 22, 20, 10</h2>
+  <p>
+    Le terrain interne fait <strong>22 rangées</strong> sur <strong>10 colonnes</strong>
+    — pas 20. Pourquoi ? Parce que les pièces <em>spawnent au-dessus</em> du plateau
+    visible, dans une zone tampon de 2 rangées (<code>BUFFER_ROWS = 2</code>).
+  </p>
+  <p>
+    Quand tu regardes <code>spectrum()</code>, il ne compte que les 20 rangées
+    visibles — les pieces qui dépassent dans le buffer ne comptent pas dans la
+    hauteur affichée à tes adversaires.
+  </p>
+
+  <pre><code>export const COLS = 10
+export const TOTAL_ROWS = 22   // board interne
+export const VISIBLE_ROWS = 20 // ce que tu vois / ce que tu envoies
+export const BUFFER_ROWS = TOTAL_ROWS - VISIBLE_ROWS  // 2</code></pre>
+
+  <h2>3. Les sept fonctions qui font tout</h2>
+  <p>Voici le squelette mental, dans l'ordre où tu les rencontres dans le code:</p>
+
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Fonction</th>
+        <th style="padding:0.4rem 0.6rem">Effet</th>
+        <th style="padding:0.4rem 0.6rem">Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>createGame()</code></td><td>Plateau vide, pas de pièce.</td><td>engine.ts:172</td></tr>
+      <tr><td><code>spawn(state, type)</code></td><td>Fait apparaître une pièce; pose <code>over=true</code> si elle ne rentre pas.</td><td>engine.ts:190</td></tr>
+      <tr><td><code>move(state, 'left'|'right')</code></td><td>Décale la pièce d'une colonne.</td><td>engine.ts:217</td></tr>
+      <tr><td><code>rotate(state)</code></td><td>CW + essais de wall-kick SRS.</td><td>engine.ts:222</td></tr>
+      <tr><td><code>tick(state)</code></td><td>Gravité: descend d'une case, ou pose <code>grounded</code>, ou lock.</td><td>engine.ts:237</td></tr>
+      <tr><td><code>softDrop(state)</code></td><td>Une case vers le bas, sans lock.</td><td>engine.ts:252</td></tr>
+      <tr><td><code>hardDrop(state)</code></td><td>Chute directe jusqu'en bas puis lock.</td><td>engine.ts:264</td></tr>
+      <tr><td><code>clearLines(state)</code></td><td>Supprime les rangées pleines (visibles).</td><td>engine.ts:311</td></tr>
+      <tr><td><code>spectrum(state)</code></td><td>10 hauteurs de colonne (zone visible).</td><td>engine.ts:335</td></tr>
+      <tr><td><code>makeGarbageRow(rng)</code></td><td>Ligne incassable (un trou).</td><td>engine.ts:368</td></tr>
+      <tr><td><code>applyGarbage(state, rows)</code></td><td>Lock forcé + insertion par le bas.</td><td>engine.ts:380</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Le verrou en une frame — le détail subtil</h2>
+  <p>
+    Quand <code>tick()</code> appelle <code>lockPiece()</code>, la pièce ne devient
+    <em>pas</em> un plateau mis à jour immédiatement. Elle devient
+    <code>piece: null</code>. C'est le <strong>signal</strong>: le reducer va alors
+    appeler <code>clearLines()</code> et, si des lignes ont sauté, déclencher le
+    rapport réseau (<code>linesCleared</code>) et l'envoi de la pièce suivante.
+  </p>
+
+  <div class="diagram">
+<div class="col">
+<h4>1. tick() descend</h4>
+piece.y += 1
+  (pas grounded)
+
+<h4>2. tick() ne peut plus</h4>
+piece.grounded = true
+  (lock reporté)
+
+<h4>3. tick() suivant</h4>
+lockPiece() →
+  piece = null
+</div>
+<div class="col">
+<h4>4. reducer voit null</h4>
+Appelle clearLines()
+  → { state, cleared }
+
+<h4>5. reducer rapporte</h4>
+- socket.emit('lock')
+- socket.emit('linesCleared')
+
+<h4>6. serveur répond</h4>
+socket.on('piece') →
+  spawn(state, type)
+</div>
+  </div>
+
+  <p>
+    C'est le « lock en une frame » imposé par le sujet: la pièce n'est jamais figée
+    au moment où elle touche — elle attend le tick suivant. Ça laisse au joueur une
+    chance de glisser la pièce sous un overhang (le fameux « slide under »).
+  </p>
+
+  <h2>5. Les SRS wall-kicks en 30 secondes</h2>
+  <p>
+    Quand tu appuies sur <code>↑</code>, <code>rotate()</code> ne se contente pas
+    d'essayer la nouvelle orientation <em>in place</em>. Elle essaie jusqu'à 5
+    décalages, dans cet ordre:
+  </p>
+  <ol>
+    <li>pas de décalage,</li>
+    <li>petit décalage horizontal,</li>
+    <li>… vertical,</li>
+    <li>… combiné.</li>
+  </ol>
+  <p>
+    Le premier essai qui ne collide pas gagne. Ces tables (<code>JLSTZ_KICKS</code>,
+    <code>I_KICKS</code> dans le code) sont <em>copiées</em> depuis
+    <a href="../.scratch/red-tetris/research/srs.md"><code>.scratch/red-tetris/research/srs.md</code></a>
+    qui les a vérifiées sur 3 sources. Tu n'as pas à les mémoriser — le code les a.
+  </p>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    <a href="https://tetris.wiki/Super_Rotation_System">Tetris Wiki — SRS</a>
+    est la référence communautaire. Pour notre implémentation, l'asset local
+    <a href="../.scratch/red-tetris/research/srs.md"><code>srs.md</code></a>
+    est suffisant et plus rapide à digérer.
+  </div>
+
+  <h2>6. Le garbage en deux phases</h2>
+  <p>
+    Quand tu reçois <code>penalty {lines: 3}</code>, le reducer appelle
+    <code>makeGarbageRow(rng)</code> trois fois, puis <code>applyGarbage()</code>.
+    Ce dernier fait deux choses dans l'ordre:
+  </p>
+  <ol>
+    <li><strong>Lock forcé</strong> de la pièce active (sinon elle se retrouverait dans un monde parallèle).</li>
+    <li><strong>Insertion par le bas</strong> de k rangées pleines sauf un trou, qui poussent la pile vers le haut. Tout ce qui dépasse la rangée 0 est perdu (c'est le top-out implicite).</li>
+  </ol>
+  <pre><code>// engine.ts:380
+export function applyGarbage(state, rows) {
+  let merged = state
+  if (merged.piece !== null) merged = lockPiece(merged)  // 1
+  // ... puis insertion par le bas (2)
+}</code></pre>
+
+  <h2>7. Pourquoi `applyAction` existe</h2>
+  <p>
+    <code>applyAction(state, action)</code> est un <em>switch</em> minuscule
+    (engine.ts:403) qui mappe les 5 <code>MoveAction</code> à leur fonction
+    spécialisée. Il n'existe que pour que le reducer (<code>reducer.ts</code>) ait
+    un seul point d'entrée à appeler depuis le clavier. Lis-le en 10 secondes.
+  </p>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Pourquoi <code>tick()</code> ne lock pas la pièce tout de suite quand elle touche ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> Pour économiser un test de collision.</label>
+      <label><input type="radio" name="q1" value="b"> Pour respecter la règle « lock en une frame » du sujet, qui laisse au joueur une fenêtre pour glisser la pièce.</label>
+      <label><input type="radio" name="q1" value="c"> Parce que la pièce grounded doit d'abord recevoir un <code>spectrumHeartbeat</code>.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> C'est la règle « une frame » imposée par le sujet. <code>tick()</code> pose <code>grounded=true</code>, et seul le <code>tick()</code> suivant appelle <code>lockPiece()</code>. Cette fenêtre permet les glissements latéraux sous un overhang.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien de rangées compte <code>spectrum()</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"> 22 (le board interne entier)</label>
+      <label><input type="radio" name="q2" value="b"> 20 (la zone visible seulement)</label>
+      <label><input type="radio" name="q2" value="c"> 10 (une par colonne)</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>spectrum()</code> ne lit que les rangées <code>BUFFER_ROWS..TOTAL_ROWS</code>, c'est-à-dire la zone visible 20 rangées. Une pièce dans le buffer ne compte pas dans la hauteur affichée.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>
+    Ouvre <code>src/client/engine/engine.ts</code> et réponds, sans scroller plus loin:
+  </p>
+  <ul>
+    <li>Quelle fonction retourne un objet <em>différent</em> de <code>GameState</code> ?
+      <em>(indice: <code>clearLines</code>)</em></li>
+    <li>Combien de décalages essaie <code>rotate()</code> au maximum pour une pièce J ? <em>(5: 1 base + 4 kicks)</em></li>
+    <li>Dans <code>applyGarbage()</code>, que devient le board si <code>rows.length > TOTAL_ROWS</code> ? <em>(Tout est écrasé — c'est un top-out effectif.)</em></li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Le wall-kick T-Spin te paraît opaque ? Le lock en une frame te semble
+    arbitraire ? Le buffer de 2 rangées te questionne ? Dis-moi quel point
+    tu veux creuser — je peux produire une variante de la leçon ciblée sur
+    ton doute.
+  </div>
+
+  <div class="callout callout--key" style="margin-top:2rem">
+    <strong>Pour aller dans le détail algorithmique</strong>
+    Tu viens de voir le <em>quoi</em> (les fonctions du moteur). Le parcours
+    <strong>algorithmes</strong> commence à la
+    <a href="0007-fondations-board-collision.html">leçon 0007 — Fondations</a> et
+    déroule le <em>comment</em> pas à pas: rotation, wall-kicks, gravité, clear,
+    garbage, spectre, 7-bag. C'est la suite naturelle quand tu veux maîtriser
+    l'implémentation au niveau de chaque instruction.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0001-vue-d-ensemble.html">← Leçon 0001 — Vue d'ensemble</a>
+    <a class="next" href="0003-le-protocole-partage.html">Leçon 0003 — Le protocole partagé →</a>
+  </nav>
+</main>
+</body>
+</html>

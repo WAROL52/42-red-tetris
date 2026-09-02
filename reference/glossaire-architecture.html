@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Glossaire d'architecture · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+  <style>
+    dl { margin: 1rem 0; }
+    dt {
+      font-weight: 600;
+      margin-top: 1.2rem;
+      color: var(--accent);
+      font-size: 1.05em;
+    }
+    dd {
+      margin: 0.1rem 0 0 1rem;
+      color: var(--fg);
+    }
+    .tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.78em;
+      padding: 0.05em 0.4em;
+      border-radius: 3px;
+      margin-right: 0.3em;
+      vertical-align: middle;
+    }
+    .tag--pure { background: #dcfce7; color: #166534; }
+    .tag--oob  { background: #fef3c7; color: #92400e; }
+    .tag--shared { background: #dbeafe; color: #1e40af; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Glossaire d'architecture</h1>
+  <p class="subtitle">Référence rapide · liée aux leçons 0001–0006</p>
+
+  <p>
+    Chaque terme est suivi d'un <strong>tag</strong> indiquant où il vit:
+    <span class="tag tag--pure">pur</span> = fonction pure,
+    <span class="tag tag--oob">oob</span> = côté serveur OOP,
+    <span class="tag tag--shared">shared</span> = importé par les deux côtés.
+    Les termes du glossaire sont cohérents avec <a href="../CONTEXT.md"><code>CONTEXT.md</code></a>.
+  </p>
+
+  <dl>
+    <dt>GameState <span class="tag tag--pure">pur</span></dt>
+    <dd>L'état minimal du terrain d'un joueur: <code>{ board, piece, over }</code>. Entièrement sérialisable. Vient de <code>engine.ts:29</code>. Toute fonction du moteur le prend et le rend.</dd>
+
+    <dt>Board (ou field) <span class="tag tag--pure">pur</span></dt>
+    <dd>Grille 22×10 (<code>Cell[][]</code>). Rangées 0–1 = buffer invisible (spawn), rangées 2–21 = zone visible (20 rangées). Les spectres ne comptent que les 20 visibles.</dd>
+
+    <dt>FallingPiece <span class="tag tag--pure">pur</span></dt>
+    <dd>La pièce en chute: type, rotation (0–3), position (x, y), et flag <code>grounded</code>. Seulement présente quand une pièce est active. Chaque appel à <code>tick()</code>/move/rotate le met à jour.</dd>
+
+    <dt>Cell <span class="tag tag--shared">shared</span></dt>
+    <dd>Type d'une case du board: <code>PieceKind | 'X' | null</code>. <code>null</code> = vide, <code>'X'</code> = garbage, sinon la lettre de la pièce (I, O, T…).</dd>
+
+    <dt>PieceKind <span class="tag tag--shared">shared</span></dt>
+    <dd>Union des 7 pièces: <code>'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L'</code>. Défini dans <code>protocol.ts:1</code>.</dd>
+
+    <dt>MoveAction <span class="tag tag--shared">shared</span></dt>
+    <dd>Les 5 actions clavier: <code>'left' | 'right' | 'rotate' | 'down' | 'harddrop'</code>. Mappe 1:1 avec les fonctions du moteur via <code>applyAction</code>.</dd>
+
+    <dt>SRS (Super Rotation System) <span class="tag tag--pure">pur</span></dt>
+    <dd>Système officiel de rotation avec wall-kicks. Utilisé par <code>rotate()</code> dans <code>engine.ts</code>. Les tables sont dans <code>JLSTZ_KICKS</code> et <code>I_KICKS</code>. Source: <a href="../.scratch/red-tetris/research/srs.md">srs.md</a>.</dd>
+
+    <dt>Wall-kick <span class="tag tag--pure">pur</span></dt>
+    <dd>Décalage tenté lors d'une rotation bloquée. Jusqu'à 5 essais (incluant le neutre) pour JLSTZ/I. O n'a qu'un seul essai (pas de kick).</dd>
+
+    <dt>7-bag <span class="tag tag--oob">oob</span></dt>
+    <dd>Mélange des 7 pièces (Fisher-Yates), répété. Garantit que chaque joueur reçoit la même séquence, et que toutes les pièces apparaissent au moins une fois par batch de 7.</dd>
+
+    <dt>Grounded <span class="tag tag--pure">pur</span></dt>
+    <dd>Flag sur <code>FallingPiece</code>. La pièce a touché un obstacle mais n'est pas encore lockée (lock en une frame). <code>tick()</code> la locke au tick suivant si elle reste grounded.</dd>
+
+    <dt>Lock en une frame <span class="tag tag--pure">pur</span></dt>
+    <dd>La pièce ne se fige pas au tick où elle touche — elle attend le tick suivant. Laisse une fenêtre pour glisser la pièce sous un overhang. Imposé par le sujet §5.</dd>
+
+    <dt>Top-out <span class="tag tag--shared">shared</span></dt>
+    <dd>Échec du joueur: spawn-overlap (la pièce ne rentre pas) ou lock-out (la pièce reste dans le buffer). Le client détecte, le serveur valide via <code>Game.topOut()</code>.</dd>
+
+    <dt>Spectrum <span class="tag tag--shared">shared</span></dt>
+    <dd>Tableau de 10 nombres (hauteur par colonne, 0–20). Envoyé au serveur après lock/linesCleared/heartbeat. Le serveur le relaie aux adversaires. Calculé sur la zone visible uniquement.</dd>
+
+    <dt>Heartbeat spectre <span class="tag tag--pure">pur</span></dt>
+    <dd>Envoi périodique (toutes les 2 s) du spectre, <em>gated</em>: si inchangé depuis le dernier envoi, on s'abstient. Implémenté dans <code>GameProvider.tsx:97</code>.</dd>
+
+    <dt>Penalty (garbage) <span class="tag tag--pure">pur</span></dt>
+    <dd>Quand un joueur clear des lignes, les adversaires reçoivent n−1 rangées incassables (un trou chacune). Le serveur relaie; c'est le client qui génère les rangées et les applique localement.</dd>
+
+    <dt>Garbage row <span class="tag tag--pure">pur</span></dt>
+    <dd>Rangée de 10 cellules pleines sauf un trou (rng injectable). Jamais clearable. Générée par <code>makeGarbageRow(rng)</code> dans <code>engine.ts</code>.</dd>
+
+    <dt>applyGarbage <span class="tag tag--pure">pur</span></dt>
+    <dd>Fonction: lock forcé de la pièce active + insertion par le bas + shift de la pile vers le haut. Ce qui dépasse le buffer 22 rangées est perdu (top-out implicite).</dd>
+
+    <dt>RootState <span class="tag tag--pure">pur</span></dt>
+    <dd>L'état du store React: identité session, phase, liste joueurs, état engine, file de pièces, flags de report. Défini dans <code>reducer.ts:14</code>. 14 actions le transforment.</dd>
+
+    <dt>Reducer <span class="tag tag--pure">pur</span></dt>
+    <dd>Fonction <code>(RootState, Action) → RootState</code>. C'est la seule transition autorisée côté client. Pas de side-effect, pas de réseau. Testable avec <code>vitest</code>.</dd>
+
+    <dt>SocketBridge <span class="tag tag--oob">oob</span></dt>
+    <dd>Adaptateur impur qui encapsule <code>socket.io-client</code>. C'est le <em>seul</em> endroit qui touche au réseau côté client. Créé par <code>createSocketBridge()</code> dans <code>socketBridge.ts</code>. Injectable (on peut le remplacer par un mock en test).</dd>
+
+    <dt>GameProvider <span class="tag tag--oob">oob</span></dt>
+    <dd>Composant React qui monte le <code>useReducer</code>, le socket, et le heartbeat. C'est la racine du store; tout composant descendant accède au state via <code>useStore()</code>.</dd>
+
+    <dt>GameSession <span class="tag tag--oob">oob</span></dt>
+    <dd>Composant « headless » (ne rend pas de DOM). Gère la boucle rAF de gravité (500 ms) et le listener clavier. Monté dans <code>GameScreen</code>, quand <code>status === 'running'</code>.</dd>
+
+    <dt>Protocol (shared) <span class="tag tag--shared">shared</span></dt>
+    <dd>Le contrat réseau: <code>ClientToServerEvents</code> (9 événements) + <code>ServerToClientEvents</code> (11 événements). C'est la <em>seule</em> intersection client-serveur. Tout ajout y commence ici.</dd>
+
+    <dt>Validation <span class="tag tag--shared">shared</span></dt>
+    <dd>Fonctions de garde (isValidName, isValidSpectrum…). Appelées côté serveur (obligatoire) et côté client (par confort). Protège contre les payloads malformés.</dd>
+
+    <dt>Room <span class="tag tag--oob">oob</span></dt>
+    <dd>Instance de jeu côté serveur, nommée par l'URL. Tenue par un <code>Map&lt;string, Game&gt;</code> dans <code>socket.ts</code>. Nettoyée quand elle devient vide.</dd>
+
+    <dt>Round <span class="tag tag--oob">oob</span></dt>
+    <dd>Un tour de jeu. Le compteur <code>Game.round</code> s'incrémente à chaque <code>beginRound()</code>. Les rounds successifs dans une même room portent des numéros consécutifs.</dd>
+
+    <dt>Host <span class="tag tag--oob">oob</span></dt>
+    <dd>Premier joueur à rejoindre la room. Seul le host peut démarrer/rejouer. Si le host part, le prochain joueur devient host (réélection).</dd>
+
+    <dt>Eliminated <span class="tag tag--oob">oob</span></dt>
+    <dd>Flag sur <code>Player</code>. Passe à <code>true</code> après <code>topOut()</code>. Remis à <code>false</code> au début de chaque round. Le joueur éliminé ne reçoit plus de pièces.</dd>
+
+    <dt>Horizon <span class="tag tag--shared">shared</span></dt>
+    <dd>Nombre de pièces à venir envoyées avec chaque distribution (valeur: <code>HORIZON_LENGTH = 3</code>). Affichées dans le panneau « Prochaines pièces ».</dd>
+
+    <dt>Hono <span class="tag tag--oob">oob</span></dt>
+    <dd>Framework HTTP minimal utilisé côté serveur pour servir le bundle et la SPA. Configuré dans <code>app.ts</code>, démarré dans <code>index.ts</code> sur le port 3000.</dd>
+  </dl>
+
+  <h2>Liens avec les leçons</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Leçon</th>
+        <th style="padding:0.4rem 0.6rem">Termes principaux couverts</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>0001 — Vue d'ensemble</td><td>Room, Host, Protocol, State</td></tr>
+      <tr><td>0002 — Le moteur pur</td><td>GameState, SRS, Wall-kick, Grounded, Lock, Garbage, Spectrum</td></tr>
+      <tr><td>0003 — Le protocole partagé</td><td>PieceKind, MoveAction, Horizon, Validation, PlayerPublic</td></tr>
+      <tr><td>0004 — Le store client</td><td>RootState, Reducer, SocketBridge, GameProvider, Heartbeat</td></tr>
+      <tr><td>0005 — Le serveur</td><td>Player, Game, Room, Round, Host, 7-bag, Eliminated</td></tr>
+      <tr><td>0006 — L'assemblage</td><td>GameSession, BoardView, JoinScreen, Hono, BrowserRouter</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Liens externes</h2>
+  <ul>
+    <li><a href="https://tetris.wiki/Super_Rotation_System">Tetris Wiki — SRS</a></li>
+    <li><a href="https://socket.io/docs/v4/rooms/">Socket.IO — Rooms</a></li>
+    <li><a href="https://react.dev/learn/extracting-state-logic-into-a-reducer">React — useReducer</a></li>
+  </ul>
+
+  <nav class="nav">
+    <a class="prev" href="0006-l-assemblage.html">← Leçon 0006 — L'assemblage</a>
+    <span class="next">Références complètes</span>
+  </nav>
+</main>
+</body>
+</html>

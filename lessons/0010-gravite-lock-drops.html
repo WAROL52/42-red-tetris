@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0010 — Gravité, lock en une frame, drops · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Gravité, lock en une frame et drops</h1>
+  <p class="subtitle">Leçon 0010 · 15 min · <strong>algorithme n°4 — la machine à états du mouvement vertical</strong></p>
+
+  <p>
+    C'est le « moteur du moteur »: la séquence temporelle qui fait tomber la pièce,
+    la pose, puis la fige. Trois algorithmes collaborent ici: une <strong>descente</strong>
+    (tick / soft drop), une <strong>chute</strong> (hard drop), et surtout une
+    <strong>machine à états</strong> qui gère la fameuse règle « lock en une frame ».
+  </p>
+
+  <h2>1. L'état <code>grounded</code> — la clé de tout</h2>
+  <p>
+    <code>FallingPiece</code> porte un booléen <code>grounded</code>. C'est lui qui
+    encode « la pièce a touché le dessus de la pile mais n'est pas encore figée ».
+    La distinction est volontaire et exigée par la spec:
+  </p>
+  <pre><code>interface FallingPiece {
+  type, state, x, y,
+  grounded: boolean   // touché en bas ? (pas encore figé)
+}</code></pre>
+
+  <div class="callout callout--key">
+    <strong>La machine à états du lock</strong>
+    <pre>
+      [en l'air]  --tick ne peut plus descendre-->  [grounded]
+      [grounded]  --tick suivant------------------>  [locké → piece=null]
+    </pre>
+    Une pièce n'est <em>jamais</em> figée au tick où elle touche. Elle devient
+    <code>grounded=true</code>, puis le <em>tick suivant</em> appellera
+    <code>lockPiece()</code>. C'est la fenêtre d'une frame qui permet de glisser
+    la pièce horizontalement sous un rebord.
+  </div>
+
+  <h2>2. <code>tick()</code> — la gravité pas-à-pas</h2>
+  <pre><code>function tick(state) {
+  const p = state.piece
+  if (p === null || state.over) return state
+  if (p.grounded) {
+    return lockPiece(state)                 // ① déjà au sol → lock
+  }
+  if (!collides(board, type, state, x, y+1)) {
+    return { ...state, piece: { ...p, y: p.y + 1 } }   // ② peut descendre
+  }
+  return { ...state, piece: { ...p, grounded: true } } // ③ touche → grounded
+}</code></pre>
+  <p>Trois branches, dans cet ordre:</p>
+  <ol>
+    <li><strong>Grounded</strong> → lock immédiat (on a attendu la frame précédente).</li>
+    <li><strong>Case du dessous libre</strong> → on descend d'une cellule (<code>y+1</code>).</li>
+    <li><strong>Case bloquée</strong> → on marque <code>grounded=true</code> (mais on ne lock pas encore).</li>
+  </ol>
+  <p>
+    Le résultat de <code>tick()</code> qui renvoie <code>piece: null</code> est le
+    <em>signal</em> que la leçon 0002 décrivait: le reducer détecte ce <code>null</code>
+    et enchaîne sur <code>clearLines()</code> puis sur l'envoi réseau.
+  </p>
+
+  <h2>3. <code>softDrop()</code> — une case, sans attendre la gravité</h2>
+  <pre><code>function softDrop(state) {
+  // Identique à tick(), MAIS sans la branche "already grounded → lock".
+  if (!collides(... y+1)) return { ...(y+1) }
+  return { ...grounded: true }
+}</code></pre>
+  <p>
+    <code>softDrop</code> est presque un <code>tick</code> sans lock. Il descend la
+    pièce d'une case si possible, sinon la marque <code>grounded</code>. Différence
+    clé: il <strong>n'appelle jamais</strong> <code>lockPiece</code>. Le « ↓ » du
+    clavier ne fige donc pas immédiatement — il se contente de poser la pièce, la
+    gravité s'occupe du reste au tick suivant.
+  </p>
+
+  <h2>4. <code>hardDrop()</code> — chute libre, puis lock immédiat</h2>
+  <pre><code>function hardDrop(state) {
+  let y = p.y
+  while (y &lt; TOTAL_ROWS &amp;&amp; !collides(board, type, state, x, y + 1)) {
+    y++                                     // descente "simulée" en boucle
+  }
+  return lockPiece({ ...state, piece: { ...p, y, grounded: true } })
+}</code></pre>
+  <ul>
+    <li>Une boucle <code>while</code> descend <code>y</code> jusqu'à la première case pleine.</li>
+    <li>Puis on appelle <em>directement</em> <code>lockPiece</code> — pas de frame d'attente. Le hard drop fige immédiatement (sauf si <code>lockPiece</code> est no-op).</li>
+    <li>Complexité: O(hauteur max) = O(22). Trivial.</li>
+  </ul>
+
+  <div class="callout callout--key">
+    <strong>Le grand comparatif</strong>
+    <table style="width:100%;border-collapse:collapse;margin:0.4rem 0;font-size:0.95em">
+      <thead><tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.3rem 0.5rem">Fonction</th>
+        <th style="padding:0.3rem 0.5rem">Descend</th>
+        <th style="padding:0.3rem 0.5rem">Locke</th>
+        <th style="padding:0.3rem 0.5rem">Exemple</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><code>tick()</code></td><td>1 case</td><td>oui (frame d'après)</td><td>gravité automatique</td></tr>
+        <tr><td><code>softDrop()</code></td><td>1 case</td><td>non</td><td>touche ↓</td></tr>
+        <tr><td><code>hardDrop()</code></td><td>tout en bas</td><td>oui, immédiat</td><td>touche Espace</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>5. <code>lockPiece()</code> — la fusion dans le board</h2>
+  <pre><code>function lockPiece(state) {
+  const board = emptyBoard()                 // copie vierge
+  for r, c: board[r][c] = state.board[r][c]  // reprend le terrain
+  for ({ r, c } of minos(p.type, p.state)) {
+    const wy = p.y + r, wx = p.x + c
+    if (wy &gt;=0 &amp;&amp; wy&lt;TOTAL_ROWS &amp;&amp; wx&gt;=0 &amp;&amp; wx&lt;COLS)   // bounds-check
+      board[wy][wx] = p.type                 // écrit la pièce
+  }
+  return { board, piece: null, over: state.over }
+}</code></pre>
+  <ul>
+    <li><strong>Copie</strong> du board + <strong>écriture</strong> des minos. Immutable : l'ancien board n'est pas altéré.</li>
+    <li>Le <code>bounds-check</code> évite d'écrire hors du tableau (une pièce pouvant dépasser en haut après un kick).</li>
+    <li>Retourne <code>piece: null</code> — c'est « LA pièce est maintenant figée ».</li>
+  </ul>
+  <p>
+    Les minos qui dépassent en haut (dans le buffer, au-dessus de la case 0) sont
+    <em>ignorés</em> (le bounds-check les saute silencieusement). Cela peut masquer
+    une pièce semi-hors-champ — un détail important pour le top-out (leçon 0014).
+  </p>
+
+  <h2>6. D'où vient la cadence ? — l'accumulateur rAF</h2>
+  <p>
+    La gravité n'est <em>pas</em> dans <code>engine.ts</code>: elle est déclenchée
+    par <code>GameSession</code> (leçon 0006). Un accumulateur additionne le temps
+    écoulé (<code>requestAnimationFrame</code>) et dès qu'il dépasse
+    <code>GRAVITY_MS = 500</code> ms, il dispatch <code>GRAVITY_TICK</code>, qui
+    appelle <code>tick()</code>.
+  </p>
+  <pre><code>// GameSession.tsx
+if (acc &gt;= GRAVITY_MS) {
+  acc %= GRAVITY_MS       // garde le reste (pas de dérive)
+  dispatch({ type: 'GRAVITY_TICK' })
+}</code></pre>
+  <p>
+    L'algorithme d'accumulation garantit qu'un ralentissement (frame à 30 fps) est
+    compensé: on dispatch plus souvent, mais toujours à exactement 500 ms d'intervalle
+    de <em>temps réel</em>. C'est ce qui rend la gravité <em>constante</em>, comme
+    le demande le sujet (« vitesse constante »).
+  </p>
+
+  <h2>7. Complexité</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Fonction</th>
+        <th style="padding:0.4rem 0.6rem">Complexité</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>tick()</code></td><td>O(1) (un test de collision)</td></tr>
+      <tr><td><code>softDrop()</code></td><td>O(1)</td></tr>
+      <tr><td><code>hardDrop()</code></td><td>O(22) = O(1) constant, borné</td></tr>
+      <tr><td><code>lockPiece()</code></td><td>O(22×10) = O(220) (copie + écriture)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    La mécanique « lock en une frame » et la gravité constante viennent du sujet
+    (chapitre V) et sont discutées dans
+    <a href="../.scratch/red-tetris/issues/02-grilling-engine-spec.md">ticket 02 — engine spec</a>.
+    Pour la théorie du lock delay en général: <a href="https://harddrop.com/wiki/Lock_delay">Hard Drop — Lock delay</a>.
+  </div>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que fait la pièce quand elle touche le haut de la pile lors d'un <code>tick()</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">Elle est immédiatement lockée.</label>
+      <label><input type="radio" name="q1" value="b">Elle passe en <code>grounded=true</code>.</label>
+      <label><input type="radio" name="q1" value="c">Elle est retirée du board.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Elle passe en <code>grounded=true</code>. Le lock n'a lieu qu'au <em>tick suivant</em> (machine « grounded → lock »). C'est la règle du lock en une frame.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Quelle est la différence entre <code>softDrop</code> et <code>tick</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">Aucune, elles sont identiques.</label>
+      <label><input type="radio" name="q1" value="b"><code>softDrop</code> descend d'une case OU marque grounded, mais ne lock jamais.</label>
+      <label><input type="radio" name="q1" value="c"><code>softDrop</code> descend jusqu'en bas.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>tick</code> descend, marque grounded, ET appelle <code>lockPiece</code> quand la pièce est déjà grounded. <code>softDrop</code> ne fait que descendre / marquer grounded, sans jamais locker. Le lock est laissé à la gravité.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>Simule à la main une pièce O tombant sur un plancher plat:</p>
+  <ul>
+    <li><code>spawn</code> → <code>grounded=false</code>.</li>
+    <li>Appelle <code>tick()</code> jusqu'à ce que la pièce soit <code>grounded</code>. Combien de ticks ? <em>(dépend du plancher; quand le dessous est bloqué, ce tick pose grounded.)</em></li>
+    <li>Appelle <code>tick()</code> une dernière fois. Que vaut <code>piece</code> ? <em>(null — lockée.)</em></li>
+    <li>Compare avec un <code>softDrop</code> répété sur le même plancher: quel est le comportement au dernier softDrop ? <em>(grounded=true, mais PAS null — pas de lock.)</em></li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi distinguer « grounded » et « locké » plutôt que de locker dès le
+    contact ? Quand le reducer voit <code>piece=null</code> (lock), que fait-il
+    exactement ensuite ? Veux-tu qu'on trace une partie réelle tick par tick ?
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0009-srs-wall-kicks.html">← Leçon 0009 — SRS wall-kicks</a>
+    <a class="next" href="0011-clear-lines.html">Leçon 0011 — clearLines →</a>
+  </nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0003 — Le protocole partagé · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Le protocole partagé (<code>src/shared/</code>)</h1>
+  <p class="subtitle">Leçon 0003 · 12 min · lire <code>src/shared/protocol.ts</code> en parallèle</p>
+
+  <p>
+    Le dossier <code>src/shared/</code> contient <em>deux fichiers seulement</em>:
+    <a href="../src/shared/protocol.ts"><code>protocol.ts</code></a> et
+    <a href="../src/shared/validation.ts"><code>validation.ts</code></a>. Ces
+    deux fichiers sont importés par les <strong>deux</strong> tsconfig du projet
+    — celui du navigateur et celui de Node. C'est la <em>seule</em> zone
+    d'intersection entre client et serveur, et c'est volontaire: ça force les
+    deux côtés à parler exactement la même langue, sans rien d'autre en commun.
+  </p>
+
+  <h2>1. <code>protocol.ts</code> — le dictionnaire des messages</h2>
+  <p>
+    Le fichier ne contient que des <code>type</code>, des <code>interface</code>
+    et des <code>const</code> (pas de fonctions, pas de logique). Trois blocs à
+    connaître:
+  </p>
+
+  <h3>1.1 Les types fondamentaux</h3>
+  <pre><code>export type PieceKind = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L'
+export type MoveAction = 'left' | 'right' | 'rotate' | 'down' | 'harddrop'
+export type GameStatus = 'waiting' | 'running' | 'finished'
+
+export const HORIZON_LENGTH = 3</code></pre>
+  <p>
+    <code>HORIZON_LENGTH = 3</code> veut dire: à chaque distribution de pièce, le
+    serveur envoie aussi les 3 prochaines. Le client les affiche dans le panneau
+    « Prochaines pièces ».
+  </p>
+
+  <h3>1.2 <code>PlayerPublic</code> — la forme publique d'un joueur</h3>
+  <pre><code>interface PlayerPublic {
+  id: string           // socket id — sert de clé React
+  name: string
+  isHost: boolean
+  eliminated: boolean
+  spectrum: number[]   // 10 hauteurs
+}</code></pre>
+  <p>
+    C'est ce qu'un client voit des autres joueurs. Pas de
+    <code>socketId</code>/<code>connected</code> séparé: le socket id a été retiré
+    lors du grilling du ticket 04 (cf. map). Un seul identifiant, plus simple.
+  </p>
+
+  <h3>1.3 Les deux dictionnaires d'événements</h3>
+  <p>
+    C'est la partie la plus importante. Deux interfaces symétriques:
+  </p>
+  <pre><code>ClientToServerEvents {
+  join:        ({ room, playerName }) => void
+  leave:       () => void
+  start:       () => void
+  restart:     () => void
+  move:        ({ action }) => void       // unused client-side
+  lock:        ({ spectrum }) => void
+  linesCleared:({ count, spectrum }) => void
+  spectrumHeartbeat: ({ spectrum }) => void
+  topOut:      () => void
+}
+
+ServerToClientEvents {
+  state, playerJoined, playerLeft, playerEliminated,
+  host, gameStarted, piece, spectrum, penalty,
+  gameOver, error
+}</code></pre>
+  <p>
+    Cette double interface est déclarée dans
+    <code>socket.ts</code> comme <code>Server<ClientToServerEvents, ServerToClientEvents></code>
+    — TypeScript sait alors, côté serveur, que <code>socket.emit('piece', ...)</code>
+    existe et que <code>socket.on('move', ...)</code> attend un
+    <code>{ action: MoveAction }</code>. Plus de chaînes magiques lâches dans le
+    vide.
+  </p>
+
+  <div class="callout callout--key">
+    <strong>Le contrat réseau est dans ces types.</strong>
+    Si tu ajoutes un événement, il faut l'ajouter ici <em>avant</em> de
+    l'utiliser côté code. Si tu changes le payload d'un événement existant, les
+    deux côtés cassent à la compilation — c'est le but.
+  </div>
+
+  <h2>2. <code>validation.ts</code> — le videur</h2>
+  <p>
+    Pas de logique métier. Juste des <em>gardes</em> qu'on appelle avant de
+    traiter un message reçu. Ça empêche un client malveillant (ou bogué)
+    d'envoyer <code>spectrum: [-5, 9999, ...]</code> et de faire planter le
+    serveur.
+  </p>
+
+  <pre><code>export const NAME_PATTERN = /^[\w-]{1,24}$/   // 1 à 24 alphanum ou tiret
+export const FIELD_WIDTH = 10
+export const MIN_HEIGHT = 0
+export const MAX_HEIGHT = 20
+export const MIN_CLEAR_COUNT = 1
+export const MAX_CLEAR_COUNT = 4   // Tetris = 4 max
+
+export function isValidName(value): boolean
+export function isValidSpectrum(spectrum): boolean
+export function isValidClearCount(count): boolean
+export function isValidAction(action): action is MoveAction  // narrowing TS
+export function isValidPiece(type): type is PieceKind       // narrowing TS
+export function isValidHorizon(queue): boolean</code></pre>
+
+  <p>
+    Les deux fonctions avec <code>: type is MoveAction</code> /
+    <code>: type is PieceKind</code> sont des <em>type predicates</em> TypeScript:
+    elles affinent le type après le check, donc le compilateur sait que
+    <code>action</code> est bien un <code>MoveAction</code> dans le bloc suivant.
+  </p>
+
+  <h2>3. La double vie de la validation</h2>
+  <p>
+    <code>validation.ts</code> est importé à <em>deux endroits</em>:
+  </p>
+  <ul>
+    <li><strong>Serveur</strong> (<code>socket.ts</code>) — il filtre les messages avant de toucher au domaine. Si <code>!isValidSpectrum(spectrum)</code>, on jette.</li>
+    <li><strong>Client</strong> — quand le client navigue vers <code>/room/player</code>, il appelle <code>validateJoin</code> <em>avant</em> même d'émettre le <code>join</code>, pour économiser un aller-retour si le nom est mal formé.</li>
+  </ul>
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    <a href="https://socket.io/docs/v4/server-api/">Socket.IO — Server API</a>
+    pour comprendre comment <code>Server<ClientToServerEvents, ServerToClientEvents></code>
+    type les émissions et réceptions.
+  </div>
+
+  <h2>4. La règle des imports: <code>import type</code></h2>
+  <p>
+    Tu verras dans le projet <code>import type { PieceKind } from '../shared/protocol.ts'</code>
+    partout. C'est parce que le tsconfig est en mode
+    <code>verbatimModuleSyntax</code> : il faut être explicite entre « je veux
+    juste le type » (pas de bundle) et « je veux la valeur » (à bundler).
+  </p>
+  <p>
+    Conséquence pratique : si tu modifies un <code>interface</code> dans
+    <code>protocol.ts</code>, l'erreur de compilation apparaîtra à la fois dans
+    <code>src/server/</code> et <code>src/client/</code>. C'est ton garde-fou.
+  </p>
+
+  <h2>5. Mini-tableau de référence rapide</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Question</th>
+        <th style="padding:0.4rem 0.6rem">Réponse</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Où ajouter un nouvel événement socket ?</td><td><code>protocol.ts</code> d'abord, <em>ensuite</em> les deux côtés.</td></tr>
+      <tr><td>Qui valide un payload entrant ?</td><td>Le serveur (toujours), le client (avant d'émettre, par confort).</td></tr>
+      <tr><td>Pourquoi <code>HORIZON_LENGTH = 3</code> ?</td><td>Décision UX de la spec §6 — afficher 3 pièces à venir.</td></tr>
+      <tr><td>Comment le client sait qu'une pièce est valide ?</td><td>Type narrowing <code>isValidPiece</code> dans le reducer.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien de fichiers contient <code>src/shared/</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> Un seul (<code>protocol.ts</code>).</label>
+      <label><input type="radio" name="q1" value="b"> Deux (<code>protocol.ts</code>, <code>validation.ts</code>).</label>
+      <label><input type="radio" name="q1" value="c"> Trois (plus un barrel <code>index.ts</code>).</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Exactement deux. Pas de <code>index.ts</code> — les imports sont explicites (<code>from '../shared/protocol.ts'</code>) pour rester compatibles avec <code>verbatimModuleSyntax</code> et garder la trace des fichiers.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que contient <code>protocol.ts</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"> La logique de rotation SRS.</label>
+      <label><input type="radio" name="q2" value="b"> Uniquement des types, interfaces et constantes.</label>
+      <label><input type="radio" name="q2" value="c"> Les deux dictionnaires d'événements <em>et</em> les fonctions pures associées.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Pas de logique dans <code>protocol.ts</code>. Le code vit dans <code>validation.ts</code> (gardes) et dans les modules métier. Cette séparation force <code>protocol.ts</code> à être un contrat purement déclaratif.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>Ouvre <code>protocol.ts</code> et fais la liste, sans scroller :</p>
+  <ul>
+    <li>Combien d'événements <code>ClientToServerEvents</code> ? <em>(9 — voir plus haut)</em></li>
+    <li>Combien d'événements <code>ServerToClientEvents</code> ? <em>(11)</em></li>
+    <li>Quel événement est typé dans le protocole mais inutilisé client-side ? <em>(<code>move</code> — reste pour la cohérence de typage, le serveur a un handler no-op.)</em></li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi pas un <code>index.ts</code> qui réexporte tout ? Pourquoi
+    <code>verbatimModuleSyntax</code> est strict ici ? Le pattern
+    <code>Server<CTSE, STCE></code> te semble magique ? Pose ta question —
+    je peux produire une variante ciblée.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0002-le-moteur-pur.html">← Leçon 0002 — Le moteur pur</a>
+    <a class="next" href="0004-le-store-client.html">Leçon 0004 — Le store client →</a>
+  </nav>
+</main>
+</body>
+</html>

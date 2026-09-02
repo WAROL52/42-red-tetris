@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0009 — SRS wall-kicks · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+  <style>
+    .kick { font-family:var(--mono); display:inline-block; padding:0.25rem 0.6rem; margin:0.15rem; border:1px solid var(--rule); border-radius:3px; background:#fff; }
+    .kick.used { background:#dcfce7; border-color:#86efac; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>SRS wall-kicks — l'algorithme « essaie jusqu'à 5 »</h1>
+  <p class="subtitle">Leçon 0009 · 18 min · <strong>l'algorithme le plus subtil du moteur</strong></p>
+
+  <p>
+    Une rotation <em>naïve</em> échoue dès qu'un mino touche un mur ou un bloc. Le
+    Tetris standard (SRS) rend la rotation <em>forcée</em> en essayant une série de
+    petits <strong>décalages</strong> (<em>wall-kicks</em>) pour trouver une
+    position valide proche. C'est le cœur de la « fluidité » du jeu: sans kicks, le
+    jeu semblerait bloqué. Cette leçon décompose l'algorithme précisément.
+  </p>
+
+  <h2>1. L'idée: rotation + translation combinées</h2>
+  <p>
+    Quand tu appuies sur <code>↑</code>, le moteur veut passer de l'état
+    <code>from</code> à l'état <code>to = (from+1)%4</code>. La nouvelle <em>forme</em>
+    vient de <code>SHAPES[type][to]</code> (leçon 0008). Mais rester au même
+    <code>(x, y)</code> peut faire collision. L'algorithme essaie alors une liste
+    <em>ordonnée</em> de décalages <code>(dx, dy)</code>:
+  </p>
+  <pre><code>function rotate(state) {
+  const p = state.piece
+  if (p === null || state.over) return state
+  const to = (p.state + 1) % 4                    // état CW suivant
+  for (const kick of kicksFor(p.type, p.state, to)) {
+    if (!collides(board, p.type, to, p.x+kick.dx, p.y+kick.dy)) {
+      return { ...state, piece: { ...p, state: to, x: p.x+kick.dx, y: p.y+kick.dy } }
+    }
+  }
+  return state                                    // aucun kick ne convient → on reste (state inchangé)
+}</code></pre>
+
+  <div class="callout callout--key">
+    <strong>L'invariant central du SRS</strong>
+    Le <em>premier</em> décalage de la liste qui donne une position sans collision
+    est retenu, et on s'arrête. La liste est <strong>ordonnée par préférence</strong>:
+    on essaie d'abord le décalage nul (0,0), puis on dégrade vers des décalages de
+    plus en plus grands. Si <em>aucun</em> des 5 ne marche, la rotation est
+    <strong>annulée</strong> (on retourne l'état inchangé).
+  </div>
+
+  <h2>2. La structure des tables de kicks</h2>
+  <p>
+    Les décalages dépendent de trois choses: le <em>type</em> de pièce, l'état
+    <em>de départ</em>, et l'état <em>d'arrivée</em>. Le code les stocke dans des
+    tables indexées par la transition <code>'from-&gt;to'</code>:
+  </p>
+  <pre><code>JLSTZ_KICKS = {
+  '0-&gt;1': [ {0,0}, {-1,0}, {-1,-1}, {0,2}, {-1,2} ],
+  '1-&gt;2': [ {0,0}, {1,0},  {1,1},  {0,-2},{1,-2} ],
+  '2-&gt;3': [ {0,0}, {1,0},  {1,-1}, {0,2}, {1,2} ],
+  '3-&gt;0': [ {0,0}, {-1,0}, {-1,1}, {0,-2},{-1,-2} ],
+}
+I_KICKS = { '0-&gt;1': [ {0,0}, {-2,0}, {1,0}, {-2,1}, {1,-2} ], ... }</code></pre>
+  <p>
+    Note le <strong>stress accordé à la direction de dy</strong>: le code commente
+    « <em>Positive dy is DOWN here</em> » car les tables SRS sourcées utilisent
+    y positif vers le haut. Ici, les dy positifs vont vers le bas. C'est une
+    convention à vérifier — l'erreur classique est d'inverser le signe de y.
+  </p>
+
+  <h3>2.1 Trois familles de pièces, trois traitements</h3>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Type</th>
+        <th style="padding:0.4rem 0.6rem">Table utilisée</th>
+        <th style="padding:0.4rem 0.6rem">Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>I</td><td><code>I_KICKS</code></td><td>4×4, kicks plus grands (jusqu'à ±2).</td></tr>
+      <tr><td>O</td><td>aucune</td><td>un seul essai factice <code>{0,0}</code> → pas de kick réel.</td></tr>
+      <tr><td>J, L, S, T, Z</td><td><code>JLSTZ_KICKS</code></td><td>3×3, kicks jusqu'à ±2.</td></tr>
+    </tbody>
+  </table>
+  <pre><code>function kicksFor(type, from, to) {
+  const key = `${from}-&gt;${to}`
+  if (type === 'I') return I_KICKS[key] ?? [{ dx:0, dy:0 }]
+  if (type === 'O') return [{ dx:0, dy:0 }]
+  return JLSTZ_KICKS[key] ?? [{ dx:0, dy:0 }]
+}</code></pre>
+
+  <h2>3. Pourquoi 5 essais, et pourquoi cet ordre</h2>
+  <p>
+    La convention SRS fixe 5 décalages par transition (le premier étant le nul).
+    L'ordre n'est <em>pas</em> arbitraire: il encode les « coups » les plus probables
+    en premier. Pour la transition <code>0→1</code> (état spawn → rotation CW) d'une
+    pièce J/L/S/T/Z:
+  </p>
+  <ol>
+    <li><code>(0,0)</code> — souvent la rotation passe « en l'air ».</li>
+    <li><code>(-1,0)</code> — décale d'un cran à gauche (le « wall-kick » du côté des spins).</li>
+    <li><code>(-1,-1)</code> — haut-gauche.</li>
+    <li><code>(0,2)</code> — deux crans vers le bas.</li>
+    <li><code>(-1,2)</code> — bas-gauche.</li>
+  </ol>
+  <p>
+    Ce sont ces tables (copiées depuis
+    <a href="../.scratch/red-tetris/research/srs.md">srs.md</a>, vérifiées sur 3
+    sources) qui permettent les <em>T-Spins</em> et les rotations collées au mur.
+  </p>
+
+  <h2>4. Le cas « aucun kick ne marche »</h2>
+  <p>
+    Si le board est assez contraint (par ex. 2 blocs qui encadrent la pièce de
+    chaque côté), les 5 décalages échouent. Alors l'état n'est <em>pas</em> modifié:
+    la rotation est totalement annulée. Le test
+    <a href="../src/client/engine/engine.test.ts">engine.test.ts:170</a> vérifie
+    explicitement ce comportement pour une pièce J coincée.
+  </p>
+  <pre><code>// engine.test.ts:170 — « leaves the piece unchanged when no kick fits »
+const before = pieceAt(s)
+s = rotate(s)
+expect(pieceAt(s).state).toBe(before.state)   // état inchangé
+expect(pieceAt(s).x).toBe(before.x)           // position inchangée
+...
+</code></pre>
+
+  <h2>5. L'asymétrie des tables — pour aller plus loin</h2>
+  <p>
+    Regarde bien <code>JLSTZ_KICKS['0→1']</code> et <code>JLSTZ_KICKS['1→2']</code>:
+    ils ne sont <em>pas</em> des symétriques parfaits. L'asymétrie est voulue par
+    le SRS et c'est elle qui permet des comportements spécifiques (rotation
+    glissante vers un côté plutôt que l'autre). Si tu as un doute sur un kick, la
+    bonne source est
+    <a href="https://tetris.wiki/Super_Rotation_System">Tetris Wiki — SRS</a>:
+  </p>
+  <p>
+    Le signe de <code>dy</code> est un piège : le SRS officiel liste les tables avec
+    y croissant vers le <em>haut</em>, alors que <code>engine.ts</code> (et le board)
+    utilisent y croissant vers le <em>bas</em>. C'est précisément pourquoi le code
+    a un commentaire d'alerte en tête de section. Toujours convertir avant de copier
+    une table externe.
+  </p>
+
+  <h2>6. Résumé algorithmique</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Étape</th>
+        <th style="padding:0.4rem 0.6rem">Coût</th>
+        <th style="padding:0.4rem 0.6rem">Condition</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Choisir table (<code>kicksFor</code>)</td><td>O(1)</td><td>type + transition</td></tr>
+      <tr><td>Essayer les kicks en séquence</td><td>O(5 × collision)</td><td>≤ 5 itérations</td></tr>
+      <tr><td>Premier kick valide</td><td>—</td><td>early exit</td></tr>
+      <tr><td>Aucun kick valide</td><td>—</td><td>rotation annulée, état intact</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Au pire, une rotation teste 5 positions × 4 minos = 20 tests de collision.
+    C'est O(1) et négligeable à 60 fps.
+  </p>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    <a href="https://tetris.wiki/Super_Rotation_System">Tetris Wiki — SRS</a>
+    (section wall kicks), et l'asset local vérifié
+    <a href="../.scratch/red-tetris/research/srs.md">srs.md</a> qui liste les tables
+    complètes telles qu'implémentées ici.
+  </div>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Lors d'une rotation, combien de décalages essaie la pièce J en plein air ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> Un seul (le décalage nul).</label>
+      <label><input type="radio" name="q1" value="b"> Cinq (les 5 kicks de la transition).</label>
+      <label><input type="radio" name="q1" value="c"> Zéro (les pièces J ne tournent jamais).</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>A.</strong> En plein air, le premier décalage <code>(0,0)</code> est valide dès le premier essai, donc on s'arrête immédiatement (early exit). Les 4 autres ne sont testés que si le premier échoue. L'algorithme essaie « jusqu'à 5 », pas « toujours 5 ».</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que se passe-t-il si les 5 kicks de la transition échouent ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> La pièce est forcée à la position la moins collisionnante.</label>
+      <label><input type="radio" name="q1" value="b"> La rotation est annulée; l'état reste inchangé.</label>
+      <label><input type="radio" name="q1" value="c"> La pièce se locke automatiquement.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Si aucun kick ne donne une position sans collision, <code>rotate()</code> retourne l'état tel quel (pas de rotation). C'est vérifié par le test <code>engine.test.ts:170</code>: état et position restent identiques.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>Pour la transition <code>'0→1'</code> de la pièce T:</p>
+  <ul>
+    <li>Combien d'essais <em>maximum</em> sont tentés ? <em>(5)</em></li>
+    <li>Si <code>(-1,0)</code> est le premier kick valide, que valent <code>x</code> et <code>y</code> après rotation ? <em>(x+(-1), y+0 → x décrémenté de 1, y inchangé.)</em></li>
+    <li>Explique en une phrase pourquoi le décalage nul est tenté en premier. <em>(Il maximise la simplicité: si la rotation simple suffit, on ne bouge pas la pièce.)</em></li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi les kicks d'une pièce I sont-ils plus grands (±2) que ceux des autres ?
+    Comment vérifieriez-vous empiriquement qu'une table est correcte ? Veux-tu un
+    exercice où on transforme une table en coordonnées monde ? Dis-moi.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0008-rotation-matrices.html">← Leçon 0008 — Rotation &amp; matrices</a>
+    <a class="next" href="0010-gravite-lock-drops.html">Leçon 0010 — Gravité, lock &amp; drops →</a>
+  </nav>
+</main>
+</body>
+</html>

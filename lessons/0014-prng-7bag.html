@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0014 — PRNG déterministe (mulberry32), Fisher-Yates, 7-bag · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>PRNG déterministe, Fisher-Yates et 7-bag</h1>
+  <p class="subtitle">Leçon 0014 · 15 min · <strong>algorithmes n°8 &amp; n°9</strong></p>
+
+  <p>
+    Le jeu a besoin de « hasard » pour la position du trou dans le garbage, et pour
+    ordonner la 7-bag de pièces. Mais un hasard <em>imprévisible</em> rendrait les
+    tests impossibles. La solution est un <strong>générateur pseudo-aléatoire
+    déterministe</strong> (même seed → même suite) combiné à un
+    <strong>shuffle Fisher-Yates</strong>. Cette leçon couvre les deux, dans le détail.
+  </p>
+
+  <h2>1. Pourquoi un PRNG déterministe plutôt que <code>Math.random()</code></h2>
+  <ul>
+    <li><code>Math.random()</code> est <em>non-déterministe</em>: la même « graine »
+      ne peut pas être rejouée. Impossible de reproduire une partie buguée.</li>
+    <li><code>mulberry32(seed)</code> produit la <em>même suite de nombres</em> pour le
+      même seed. Un test peut donc injecter <code>mulberry32(42)</code> et prévoir
+      exactement quels trous / quel ordre de pièces vont sortir.</li>
+    <li>C'est un « PRNG » (générateur pseudo-aléatoire): la suite a l'air aléatoire,
+      mais elle est entièrement reproductible.</li>
+  </ul>
+
+  <h2>2. <code>mulberry32</code> — le cœur du PRNG</h2>
+  <pre><code>export function mulberry32(seed) {
+  let a = seed &gt;&gt;&gt; 0
+  return () =&gt; {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a &gt;&gt;&gt; 15), 1 | a)
+    t = (t + Math.imul(t ^ (t &gt;&gt;&gt; 7), 61 | t)) ^ t
+    return ((t ^ (t &gt;&gt;&gt; 14)) &gt;&gt;&gt; 0) / 4294967296
+  }
+}</code></pre>
+  <ul>
+    <li>Il retourne une <strong>fonction</strong> qui, à chaque appel, renvoie un flottant
+      dans <code>[0, 1)</code>.</li>
+    <li>L'état interne <code>a</code> est mis à jour à chaque appel — c'est de là que
+      vient la « suivante » valeur (déterministe tant que <code>a</code> et l'entrée
+      sont identiques).</li>
+    <li><code>&gt;&gt;&gt; 0</code>, <code>| 0</code>, <code>Math.imul</code> forcent les
+      opérations entières 32 bits — un détail crucial pour que la suite soit
+      <em>reproductible</em> (le flottant JS ne suffit pas seul; on veut des entiers
+      32 bits stables).</li>
+  </ul>
+
+  <div class="callout callout--key">
+    <strong>Le contrat du PRNG</strong>
+    Même seed + même nombre d'appels → même suite. C'est ce qui rend le moteur (et
+    le shuffle) <em>déterministe en test</em>. Le test <code>engine.test.ts:326</code>
+    le valide: deux <code>mulberry32(7)</code> produisent les mêmes 100 valeurs.
+  </div>
+
+  <h2>3. <code>shuffle</code> — Fisher-Yates (ou Knuth shuffle)</h2>
+  <pre><code>function shuffle(items, rng) {
+  const out = [...items]
+  for (let i = out.length - 1; i &gt; 0; i--) {
+    const j = Math.floor(rng() * (i + 1))   // index aléatoire dans [0..i]
+    ;[out[i], out[j]] = [out[j], out[i]]     // échange
+  }
+  return out
+}</code></pre>
+  <p>Algorithme de <strong>Fisher-Yates</strong> (décrit par Fisher et Yates, popularisé
+  par Knuth<em>). Chaque élément a une chance égale d'occuper chaque position.</p>
+
+  <h3>3.1 Pourquoi on part du BAS et on descend vers le haut</h3>
+  <p>
+    Le bouclage part de l'indice <em>le plus à droite</em> et descend vers l'indice 1.
+    À chaque étape, on tire un <code>j</code> uniformément dans
+    <code>[0..i]</code> (indice <em>inclus</em>) et on échange <code>out[i]</code>
+    avec <code>out[j]</code>. On s'arrête à <code>i = 1</code> (l'échange avec
+    l'indice 0 n'est pas nécessaire).
+  </p>
+  <p>
+    On descend parce qu'une fois qu'un élément est placé à l'indice <code>i</code>,
+    il n'est plus jamais remué (c'est <em>déjà</em> sa position finale). Descendre
+    garantit l'uniformité (chaque permutation équiprobable).
+  </p>
+
+  <h3>3.2 Complexité &amp; optimalité</h3>
+  <ul>
+    <li><strong>O(n)</strong> — chaque élément est touché exactement une fois.</li>
+    <li>C'est l'algorithme <em>optimal</em> de permutation: n−1 échanges, O(n) temps, O(n) espace pour la copie.</li>
+  </ul>
+
+  <h2>4. <code>bag</code> — le 7-bag Tetris</h2>
+  <pre><code>function bag(items, rng) {
+  return shuffle(items, rng)   // une permutation du 7-bag
+}</code></pre>
+  <p>
+    Le <strong>7-bag</strong> est la règle de distribution officielle du guidetline:
+    on mélange les 7 pièces (un « sac »), on les distribue une par une dans cet
+    ordre, puis on prépare un nouveau sac mélangé. Résultat:
+  </p>
+  <ul>
+    <li>chaque groupe de 7 pièces contient <strong>exactement</strong> une fois chaque pièce (aucun manque),</li>
+    <li>l'ordre <strong>dans</strong> le groupe est aléatoire,</li>
+    <li>chaque pièce apparaît au moins une fois par batch — pas de sécheresse prolongée.</li>
+  </ul>
+  <p>
+    Côté serveur (<code>domain.ts</code>), <code>BAG = ['I','O','T','S','Z','J','L']</code>
+    est mélangé via un <code>shuffle</code> <em>local</em> (qui utilise
+    <code>Math.random</code> côté serveur, lui le reproductible) puis poussé dans la
+    séquence. Chaque joueur consomme la même séquence, à son propre <code>nextIndex</code>.
+  </p>
+
+  <div class="diagram">
+<div class="col">
+<h4>7-bag: flux</h4>
+BAG = I O T S Z J L
+  → shuffle → S J I L O T Z
+  → distribuer un par un
+  → quand vide, re-mélanger
+  S J I L O T Z | J L S T Z I O | ...
+      bag 1            bag 2
+(chaque bag = les 7 pièces, 1 fois)
+</div>
+<div class="col">
+<h4>Client vs serveur</h4>
+Client (garbage):
+  mulberry32(seed) injecté
+  → makeGarbageRow déterministe
+Serveur (pièces):
+  Math.random() (non déterministe)
+  → shuffle(BAG) côté serveur
+</div>
+  </div>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    Le 7-bag est une règle officielle: voir
+    <a href="https://tetris.wiki/Super_Rotation_System">Tetris Wiki — Random Generator</a>.
+    <code>mulberry32</code> est un PRNG connu (originellement publié par Tommy Ettinger).
+    Dans le code: <a href="../src/client/engine/seed.ts"><code>seed.ts</code></a> entier.
+  </div>
+
+  <h2>5. Où le seed est-il utilisé côté client</h2>
+  <p>
+    Dans <code>reducer.ts</code>, le rng est <em>seédé</em> à partir du nom de la
+    session et d'un compteur de garbage:
+  </p>
+  <pre><code>// initialState
+garbageSeed: hash(room + ':' + playerName) ^ 0x9e3779b9
+
+// à chaque ticket OPPONENT_LINES
+const rng = mulberry32(state.garbageSeed + state.garbageIncoming)</code></pre>
+  <p>
+    Combiner seed + compteur garantit que deux players dans deux rooms ne reçoivent
+    pas des trous identiques, tout en restant rejouables en test.
+  </p>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Pourquoi multiplier les PRNG déterministes plutôt que <code>Math.random()</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">Parce que <code>Math.random()</code> est trop lent.</label>
+      <label><input type="radio" name="q1" value="b">Pour pouvoir rejouer une séquence identique en test (même seed → même sortie).</label>
+      <label><input type="radio" name="q1" value="c">Parce que <code>Math.random()</code> est biaisé.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Un PRNG déterministe produit la même suite pour le même seed, ce qui rend les tests rejouables (exemple: <code>engine.test.ts</code> vérifie que deux <code>mulberry32(7)</code> donnent les mêmes 100 valeurs).</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien de pièces contient chaque batch de 7-bag d'un joueur ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">7</label>
+      <label><input type="radio" name="q1" value="b">10</label>
+      <label><input type="radio" name="q1" value="c">22</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>A.</strong> Exactement 7 pièces par batch — chacune <em>une fois</em>. C'est la garantie « Random Generator » Tetris: chaque groupe de 7 contient une fois chaque pièce.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>
+    Sans exécuter, prédis l'effet de <code>shuffle(['A','B','C'], rng)</code> avec un
+    <code>rng</code> qui renvoie alternativement 0, puis 0:
+  </p>
+  <ul>
+    <li>i=2: j = floor(0 × 3) = 0 → échange out[2] et out[0] → C B A.</li>
+    <li>i=1: j = floor(0 × 2) = 0 → échange out[1] et out[0] → B C A.</li>
+    <li>Résultat: <code>['B','C','A']</code>. Essaie de le vérifier dans la console
+      (exécute le shuffle).</li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi les opérateurs <code>| 0</code> et <code>&gt;&gt;&gt;</code> sont-ils
+    nécessaires dans mulberry32 ? Pourquoi le serveur utilise <code>Math.random()</code>
+    dans <code>domain.ts</code> alors que le client est déterministe ? Le shuffle
+    est-il parfaitement uniforme ? Dis-moi.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0013-garbage.html">← Leçon 0013 — Garbage</a>
+    <a class="next" href="0015-round-serveur.html">Leçon 0015 — Machine d'états serveur →</a>
+  </nav>
+</main>
+</body>
+</html>

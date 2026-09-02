@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0006 — L'assemblage · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>L'assemblage: route, écran, boucle rAF</h1>
+  <p class="subtitle">Leçon 0006 · 12 min · ouvrir <code>src/client/App.tsx</code>, <code>screens/</code> et <code>GameSession.tsx</code></p>
+
+  <p>
+    Tu as vu séparément l'architecture (leçon 1), le moteur (2), le protocole
+    (3), le store (4) et le serveur (5). Cette dernière leçon te montre
+    <em>comment tout se monte</em> quand le navigateur charge l'app. C'est la
+    dernière pièce du puzzle — après celle-ci, tu peux lire n'importe quel
+    fichier du projet sans te perdre.
+  </p>
+
+  <h2>1. Le démarrage — <code>App.tsx</code></h2>
+  <pre><code><BrowserRouter>
+  <Routes>
+    <Route path="/" element={<JoinScreen />} />
+    <Route path="/:room/:playerName" element={<GameScreen />} />
+  </Routes>
+</BrowserRouter></code></pre>
+  <p>
+    <code>BrowserRouter</code> (de <code>react-router-dom</code>) gère l'URL.
+    Deux routes seulement: <code>/</code> (formulaire de join) et
+    <code>/:room/:playerName</code> (la partie). Le serveur Hono est configuré
+    pour servir <code>index.html</code> sur toutes les routes (SPA fallback),
+    donc un refresh sur <code>/zen/alice</code> ne casse pas.
+  </p>
+
+  <h2>2. <code>JoinScreen</code> — la porte d'entrée</h2>
+  <p>
+    Trois lignes importantes:
+  </p>
+  <ol>
+    <li><code>sanitize(value)</code> filtre les caractères hors <code>[A-Za-z0-9_-]</code> côté client (cohérent avec <code>NAME_PATTERN</code> côté serveur).</li>
+    <li>Le bouton est désactivé tant qu'un des deux champs est vide.</li>
+    <li>Au submit, on navigue vers <code>/{room}/{name}</code> avec URL encoding — donc on accepte les caractères spéciaux dans l'input pour les décoder dans <code>GameScreen</code>.</li>
+  </ol>
+
+  <h2>3. <code>GameScreen</code> — l'orchestrateur</h2>
+  <p>
+    Le composant fait deux choses dans cet ordre:
+  </p>
+  <ol>
+    <li>Lit les <code>useParams()</code>, décode URL, renvoie vers <code>/</code> si vide.</li>
+    <li>Monte le <code>GameProvider</code> qui <em>contient</em> tout le reste (y compris un composant <code>GameSession</code> qui ne rend rien — il gère les effets de bord).</li>
+  </ol>
+
+  <div class="callout callout--key">
+    <strong>Pattern « headless component »</strong>
+    <code>GameSession</code> ne rend <em>aucun DOM</em> (juste <code>return null</code>).
+    Son seul rôle est de brancher les <code>useEffect</code> qui animent le
+    jeu (rAF de gravité + listener clavier). Cette séparation rend
+    <code>GameScreen</code> purement déclaratif.
+  </div>
+
+  <h3>3.1 Le découpage de <code>GameScreen</code></h3>
+  <p>
+    Le fichier est composé de <em>cinq petits composants</em> locaux, tous des
+    fonctions qui utilisent <code>useStore()</code>:
+  </p>
+  <ul>
+    <li><code>StatusBanner()</code> — bannière contextuelle (<em>waiting</em> / <em>running</em> / <em>finished</em>).</li>
+    <li><code>HostControls()</code> — bouton <em>Démarrer</em> / <em>Rejouer</em> visible uniquement pour le host.</li>
+    <li><code>Lobby()</code> — liste des joueurs + status + contrôles host.</li>
+    <li><code>Field()</code> — terrain central + panneau latéral « Prochaines pièces ».</li>
+    <li><code>Opponents()</code> — rail droit avec les spectres des adversaires (grisés si éliminés).</li>
+  </ul>
+  <p>
+    Tous sont <em>connectés au store</em>, aucun n'a son propre état local sauf
+    <code>HostControls</code> (qui n'en a pas besoin) et <code>StatusBanner</code>
+    (idem).
+  </p>
+
+  <h2>4. La boucle rAF — <code>GameSession</code></h2>
+  <p>
+    Voici le cœur temporel du jeu. Une seule boucle tourne tant que
+    <code>status === 'running'</code>:
+  </p>
+  <pre><code>useEffect(() => {
+  if (state.status !== 'running') return
+  let frame = 0, last = performance.now(), acc = 0
+  const loop = (now: number) => {
+    frame = requestAnimationFrame(loop)
+    acc += now - last
+    last = now
+    if (engineRef.current.piece === null || engineRef.current.over) return
+    if (acc >= GRAVITY_MS) {       // 500 ms
+      acc %= GRAVITY_MS
+      dispatch({ type: 'GRAVITY_TICK' })
+    }
+  }
+  frame = requestAnimationFrame(loop)
+  return () => cancelAnimationFrame(frame)
+}, [state.status, dispatch])</code></pre>
+
+  <h3>4.1 Pourquoi un accumulateur et pas un <code>setInterval</code></h3>
+  <ul>
+    <li><strong>Précision</strong>: <code>requestAnimationFrame</code> se synchronise avec le refresh de l'écran (~60 fps). Un <code>setInterval(500)</code> dérive si l'onglet est en arrière-plan.</li>
+    <li><strong>Cleanup propre</strong>: <code>cancelAnimationFrame</code> dans le cleanup du <code>useEffect</code> — StrictMode-safe.</li>
+    <li><strong>Déterminisme relatif</strong>: <code>acc</code> accumule le delta, donc un tick lent n'est jamais perdu.</li>
+  </ul>
+
+  <h2>5. Le clavier — focus-safe</h2>
+  <pre><code>const onKey = (event: KeyboardEvent) => {
+  const action = KEY_MOVES[event.key]
+  if (action === undefined) return
+  event.preventDefault()
+  if (statusRef.current !== 'running' || engine.over || engine.piece === null) return
+  dispatch({ type: 'LOCAL_ACTION', payload: { action } })
+}
+window.addEventListener('keydown', onKey)</code></pre>
+  <p>
+    Le mapping clavier (sujet V.1.1) est:
+    <code>← →</code> = move, <code>↑</code> = rotate, <code>↓</code> = soft drop,
+    <code>Espace</code> = hard drop. On utilise <code>event.preventDefault()</code>
+    pour éviter le scroll de page sur <code>Espace</code>.
+  </p>
+
+  <div class="callout callout--src">
+    <strong>Détail d'implémentation</strong>
+    Le prototype 07 mappait initialement <code>← →</code> à la rotation
+    (incohérence corrigée au moment de l'assemblage de la spec — cf.
+    <a href="../.scratch/red-tetris/map.md">map.md</a>). Ce genre de drift
+    entre prototype et spec est normal ; le handoff final l'a corrigé.
+  </div>
+
+  <h2>6. L'affichage du terrain — <code>BoardView</code></h2>
+  <p>
+    <code>BoardView</code> est purement déclaratif : il prend
+    <code>engine: GameState</code> et rend 200 <code><div></code>. Pas
+    d'état, pas d'effet. La fonction <code>visibleRows()</code> copie les 20
+    rangées visibles du board, puis <em>peint</em> la pièce active par-dessus.
+  </p>
+  <p>
+    Pas de <code><table></code>, pas de <code><canvas></code>, pas
+    de SVG — c'est imposé par le sujet. Ici, on utilise des <code><div></code>
+    en CSS Grid via <code>.board</code>.
+  </p>
+
+  <h2>7. La carte complète revisitée</h2>
+  <div class="diagram">
+<div class="col">
+<h4>Composants React</h4>
+App.tsx
+  BrowserRouter
+    /            → JoinScreen
+    /:r/:n      → GameScreen
+                   ├ Lobby, Field, Opponents
+                   ├ GameSession (rAF, keydown)
+                   └ GameProvider
+                     ├ useReducer(reducer)
+                     └ socketBridge → socket.io
+</div>
+<div class="col">
+<h4>Logique pure</h4>
+engine/engine.ts
+  createGame, spawn, tick, move,
+  rotate, softDrop, hardDrop,
+  clearLines, applyGarbage, spectrum
+
+shared/protocol.ts
+  types des events
+shared/validation.ts
+  isValidName, isValidSpectrum…
+
+</div>
+<div class="col">
+<h4>Serveur</h4>
+server/app.ts (Hono SPA)
+server/index.ts (port 3000)
+server/domain.ts
+  Game (OOP, machine d'état)
+  Player (OOP)
+server/socket.ts
+  9 handlers d'événements
+</div>
+  </div>
+
+  <h2>8. Mini-quiz final</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien de routes <code>react-router</code> dans <code>App.tsx</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> Une seule (<code>/:room/:playerName</code>).</label>
+      <label><input type="radio" name="q1" value="b"> Deux (<code>/</code> et <code>/:room/:playerName</code>).</label>
+      <label><input type="radio" name="q1" value="c"> Trois (<code>/</code>, <code>/:room</code>, <code>/:room/:playerName</code>).</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Deux routes. La page d'accueil est <code>JoinScreen</code>, et tout le reste du jeu passe par <code>GameScreen</code> via <code>/:room/:playerName</code>. Pas de route « room sans player » — il faut être identifié pour jouer.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Où vit la cadence de gravité (500 ms) ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"><code>engine.ts</code> via un <code>setInterval</code>.</label>
+      <label><input type="radio" name="q2" value="b"><code>GameSession.tsx</code> via un accumulateur <code>requestAnimationFrame</code>.</label>
+      <label><input type="radio" name="q2" value="c"><code>GameProvider.tsx</code> via un <code>useEffect</code> avec <code>setTimeout</code>.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>GRAVITY_MS = 500</code> est défini en haut de <code>GameSession.tsx</code>, et la boucle rAF y accumule le delta avant de dispatcher <code>GRAVITY_TICK</code>. Le moteur ne connaît rien du temps — il reçoit juste <code>tick()</code> périodiquement.</div>
+  </form>
+
+  <h2>9. Que faire maintenant ?</h2>
+  <p>Tu as le parcours complet. Trois pistes pour continuer à apprendre:</p>
+  <ol>
+    <li><strong>Lire les tests</strong> (<code>*.test.ts</code> à côté de chaque fichier): ils sont la meilleure documentation du comportement attendu. <code>engine.test.ts</code> en particulier couvre SRS + edge cases.</li>
+    <li><strong>Tracer un bug</strong>: lance <code>pnpm dev</code>, ouvre deux onglets sur <code>/zen/alice</code> et <code>/zen/bob</code>, et observe ce qui se passe en jouant.</li>
+    <li><strong>Lire la spec en entier</strong>: <a href="../docs/red-tetris-spec.md"><code>docs/red-tetris-spec.md</code></a> — chaque section pointe vers le ticket de décision qui la motive.</li>
+  </ol>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Quel point reste flou ? Le pattern headless component te semble-t-il
+    arbitraire ? L'accumulateur rAF te paraît-il overkill par rapport à un
+    <code>setInterval</code> ? Tu veux une leçon bonus sur les tests, sur
+    le debugging, ou sur un aspect spécifique du SRS ?
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0005-le-serveur.html">← Leçon 0005 — Le serveur</a>
+    <span class="next">Fin du parcours</span>
+  </nav>
+</main>
+</body>
+</html>

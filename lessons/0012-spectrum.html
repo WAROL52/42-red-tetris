@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0012 — spectrum: hauteurs par colonne · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+  <style>
+    .bar { display:flex; align-items:flex-end; gap:3px; height:120px; margin:0.6rem 0; }
+    .bar .col { width:20px; background:var(--accent); border-radius:2px 2px 0 0; }
+    .bar-axis { font-family:var(--mono); font-size:0.7em; color:var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1><code>spectrum</code>: le calcul de hauteurs par colonne</h1>
+  <p class="subtitle">Leçon 0012 · 12 min · <strong>algorithme n°6</strong></p>
+
+  <p>
+    Le <em>spectre</em> est une "empreinte" compacte du terrain: 10 nombres, un par
+    colonne, chacun égal à la hauteur de blocs empilés <em>dans la zone visible</em>.
+    C'est ce que le client envoie au serveur pour que les adversaires voient ton
+    terrain « en ombre chinoise » en temps réel — sans jamais transmettre le board
+    complet (20×10 = 200 cases) mais seulement 10 nombres.
+  </p>
+
+  <h2>1. Pourquoi un spectre au lieu du board complet</h2>
+  <ul>
+    <li><strong>Bande passante</strong>: 10 nombres au lieu de 200 cellules, plusieurs fois par seconde. Énorme économie réseau.</li>
+    <li><strong>Confidentialité relative</strong>: on voit la hauteur, pas l'arrangement exact — c'est le « gameplay » multi.</li>
+    <li><strong>Facile à relayer</strong>: le serveur stocke simplement <code>player.spectrum</code> (10 nombres) et le relaie. (server/domain.ts:31)</li>
+  </ul>
+
+  <h2>2. L'algorithme — <code>spectrum()</code></h2>
+  <pre><code>function spectrum(state) {
+  const heights = new Array(COLS).fill(0)     // 10 zéros
+  for (let c = 0; c &lt; COLS; c++) {             // chaque colonne
+    for (let r = BUFFER_ROWS; r &lt; TOTAL_ROWS; r++) {  // zone visible de haut en bas
+      if (state.board[r][c] !== null) {
+        heights[c] = TOTAL_ROWS - r            // hauteur = distance au plancher
+        break                                   // premier bloc trouvé = le plus haut
+      }
+    }
+  }
+  return heights
+}</code></pre>
+  <p>
+    <strong>Le point clé</strong>: pour chaque colonne, on parcourt les rangées
+    <em>visibles</em> du haut vers le bas, et dès qu'on voit un bloc non-null, on
+    s'arrête. La hauteur est alors <code>TOTAL_ROWS - r</code> :
+  </p>
+  <ul>
+    <li><code>TOTAL_ROWS = 22</code>.</li>
+    <li>Si le premier bloc est à la rangée <code>r = 2</code> (tout en haut du visible), hauteur = <code>22 - 2 = 20</code>.</li>
+    <li>Si le premier bloc est au plancher, rangée 21 → hauteur = <code>22 - 21 = 1</code>.</li>
+    <li>Colonne vide → jamais de <code>break</code> → reste à 0.</li>
+  </ul>
+
+  <h2>3. La formule de hauteur, de plus près</h2>
+  <p>
+    <code>heights[c] = TOTAL_ROWS - r</code> convertit un <em>index de rangée</em>
+    (croissant vers le bas) en une <em>hauteur</em> (croissante vers le haut).
+    C'est un simple renversement d'axe.
+  </p>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Premier bloc à la rangée</th>
+        <th style="padding:0.4rem 0.6rem">→ hauteur du spectre</th>
+        <th style="padding:0.4rem 0.6rem">Interprétation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>2</td><td>20</td><td>pile pleine (bord du top-out)</td></tr>
+      <tr><td>11</td><td>11</td><td>pile moyenne</td></tr>
+      <tr><td>21</td><td>1</td><td>un seul bloc en bas</td></tr>
+      <tr><td colspan="2">(aucun)</td><td>0 (colonne vide)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Le « break » — optimisation clé</h2>
+  <p>
+    Pour une colonne pleine, on lit une seule case (le premier bloc) puis on
+    <code>break</code>. Sans <code>break</code>, on parcourrait 20 cases pour rien.
+    C'est le même schéma « cherche le premier match » que <code>some()</code> dans
+    <code>collides</code>.
+  </p>
+  <p>
+    Rappelle-toi leçon 0002: le spectre <strong>ignore le buffer</strong>. On part
+    de <code>BUFFER_ROWS</code> (2), pas de 0. Donc une pièce qui dépasse en haut
+    (dans le buffer) ne gonfle pas ta hauteur affichée — c'est voulu, tu ne « vois »
+    pas le buffer.
+  </p>
+
+  <h2>5. Complexité</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Cas</th>
+        <th style="padding:0.4rem 0.6rem">Complexité</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Board vide</td><td>O(10 × 20) = O(200) — parcours complet (aucun break)</td></tr>
+      <tr><td>Board plein</td><td>O(10 × 1) = O(10) — break immédiat</td></tr>
+      <tr><td>Cas moyen</td><td>O(10 × hauteur moyenne)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>6. Où le spectre est-il utilisé ?</h2>
+  <ul>
+    <li><strong>Après un lock</strong>: <code>bridge.emit('lock', { spectrum })</code>.</li>
+    <li><strong>Après un clear</strong>: <code>linesCleared { count, spectrum }</code>.</li>
+    <li><strong>Heartbeat</strong> (toutes les 2 s), mais <em>gated</em> — on ne réémet que si le spectre a changé.</li>
+  </ul>
+  <p>
+    Le serveur le relaie à tous les autres joueurs via l'événement <code>spectrum</code>.
+    C'est ce qui alimente le rail des <code>SpectrumView</code> dans
+    <code>GameScreen</code>.
+  </p>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    La décision du spectre en temps réel (hauteur max par colonne, zone visible
+    seule, heartbeat 2 s gated) est documentée dans
+    <a href="../docs/red-tetris-spec.md">docs/red-tetris-spec.md §4</a>. L'implémentation
+    est dans
+    <a href="../src/client/engine/engine.ts">engine.ts:335</a>.
+  </div>
+
+  <h2>Micro-exercice visual</h2>
+  <div class="bar" id="bars"></div>
+  <script>
+    const heights = [3, 5, 0, 2, 12, 8, 9, 4, 0, 1]
+    heights.forEach(h => {
+      const el = document.createElement('div')
+      el.className = 'col'
+      el.style.height = h + 'px'
+      el.title = 'hauteur ' + h
+      document.getElementById('bars').appendChild(el)
+    })
+  </script>
+  <p class="bar-axis">Exemple de spectre: [3, 5, 0, 2, 12, 8, 9, 4, 0, 1] — colonne 4 très haute (12), colonnes 2 et 8 vides.</p>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Quel est l'indice de la première rangée <em>visible</em> (en code) ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">0</label>
+      <label><input type="radio" name="q1" value="b"><code>BUFFER_ROWS</code> (= 2)</label>
+      <label><input type="radio" name="q1" value="c"><code>VISIBLE_ROWS</code> (= 20)</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>spectrum</code> commence à <code>BUFFER_ROWS = 2</code> et s'arrête à <code>TOTAL_ROWS = 22</code> — c'est la zone visible. Il ignore les rangées 0–1 (le buffer de spawn).</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Quelle valeur de spectre donne un premier bloc à la rangée 2 ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">22</label>
+      <label><input type="radio" name="q1" value="b">20</label>
+      <label><input type="radio" name="q1" value="c">2</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>heights[c] = TOTAL_ROWS - r = 22 - 2 = 20</code>. Un bloc tout en haut de la zone visible donne une hauteur de 20 — c'est le plafond affiché.</div>
+  </form>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi ne pas inclure le buffer dans le spectre ? Comment le spectre
+    change-t-il avec le garbage appliqué ? Comment vérifierais-tu les cas limites
+    de hauteur (0 et 20) dans les tests ? Dis-moi.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0011-clear-lines.html">← Leçon 0011 — clearLines</a>
+    <a class="next" href="0013-garbage.html">Leçon 0013 — Garbage →</a>
+  </nav>
+</main>
+</body>
+</html>

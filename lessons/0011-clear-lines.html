@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0011 — clearLines: détection + shift down · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1><code>clearLines</code>: détection des lignes + décalage de pile</h1>
+  <p class="subtitle">Leçon 0011 · 15 min · <strong>algorithme n°5</strong></p>
+
+  <p>
+    Quand une ligne est complète, elle disparaît et tout ce qui est au-dessus
+    tombe. C'est <code>clearLines()</code>. Bien qu'inconues, cette fonction est
+    un cas d'école d'<strong>algorithme de compaction de tableau</strong> — on y
+    opère une suppression de <em>lignes</em> avec déplacement de la pile restante.
+    Deux étapes: <em>détecter</em>, puis <em>compacter</em>.
+  </p>
+
+  <h2>1. La règle de jeu</h2>
+  <ul>
+    <li>Une ligne est « complète » si toutes ses 10 cases sont non-<code>null</code> (garbage compris).</li>
+    <li>Quand on en retire une, les lignes au-dessus descendent d'une case.</li>
+    <li>Le nombre supprimé (1 à 4) est <em>reporté</em> au serveur (<code>linesCleared {count, spectrum}</code>), qui envoie <code>count-1</code> penalités aux adversaires.</li>
+  </ul>
+  <p>
+    Le moteur retourne <code>{ state, cleared }</code> — c'est la seule fonction qui
+    renvoie une valeur <em>supplémentaire</em> au <code>GameState</code>. Le reducer
+    s'en sert pour construire le report réseau.
+  </p>
+
+  <h2>2. Étape 1 — Détection des lignes pleines</h2>
+  <pre><code>function isFullRow(board, row) {
+  for (let c = 0; c &lt; COLS; c++)
+    if (board[row][c] === null) return false
+  return true
+}
+
+const full = []
+for (let r = BUFFER_ROWS; r &lt; TOTAL_ROWS; r++) {
+  if (isFullRow(board, r)) full.push(r)    // collecte les indices pleins
+}
+if (full.length === 0) return { state, cleared: 0 }</code></pre>
+  <ul>
+    <li>On parcourt du bas <em>vers le haut</em> en collectant les indices pleins.</li>
+    <li>On ne regarde <strong>que</strong> la zone visible (<code>BUFFER_ROWS..TOTAL_ROWS</code>) — le buffer ne produit jamais de lignes.</li>
+    <li>Garbage compris: une ligne <code>X</code> compte comme pleine… sauf qu'une ligne de garbage a toujours un trou, donc elle n'est <em>jamais</em> complète par elle-même. Une ligne pleine vient toujours d'une pièce qui comble le dernier trou.</li>
+  </ul>
+
+  <h2>3. Étape 2 — Compaction de la pile (le cœur)</h2>
+  <p>Le « shift down » est l'algorithme le plus piégeux du moteur. En voici deux versions — la naïve et celle du code.</p>
+
+  <h3>3.1 Version naive (à éviter)</h3>
+  <pre><code>// Pour chaque ligne pleine, on décale tout ce qui est au-dessus d'une case.
+// Inefficace si plusieurs lignes, et bug si on le fait dans le mauvais sens.
+for (const r of full) {
+  for (let rr = r; rr &gt; 0; rr--)
+    board[rr] = board[rr - 1]   // ⚠️ danger si on ne copie pas d'abord
+  board[0] = emptyRow
+}</code></pre>
+  <p>
+    Traiter une ligne à la fois = O(cleared × rows). Si on traite 4 lignes en bas,
+    on déplace très haut plusieurs fois. Et surtout, il faut faire attention à ne
+    pas écraser des données pendant la copie.
+  </p>
+
+  <h3>3.2 Version compilée du code — un seul passage du bas vers le haut</h3>
+  <pre><code>const removed = new Set(full)        // indices à supprimer
+const board = emptyBoard()
+let shifted = 0                       // combien de lignes on "saute"
+for (let r = TOTAL_ROWS - 1; r &gt;= 0; r--) {
+  if (removed.has(r)) {               // ligne retirée
+    shifted++
+    continue
+  }
+  board[r + shifted] = state.board[r] // recopie décalée vers le bas
+}</code></pre>
+
+  <p>
+    <strong>Pourquoi du bas vers le haut ?</strong> Parce que chaque ligne retirée
+    « tire » celles du haut d'une case vers le bas. En parcourant du <em>bas</em>,
+    on sait toujours de combien décaler: <code>shifted</code> est le nombre de
+    lignes supprimées déjà rencontrées (donc <em>en dessous</em>).
+  </p>
+  <p>
+    Exemple avec 1 ligne pleine à la 2e case (index 1, en partant du bas à 0):
+  </p>
+  <pre><code>r=2: pas retirée → board[2+0] = board[2]   (décal 0)
+r=1: RETIRÉE → shifted=1, on continue
+r=0: pas retirée → board[0+1] = board[0]   (décal 1 → descend d'une case)
+résultat: la ligne 0 atterrit en 1; la place 0 est vide.</code></pre>
+
+  <h2>4. Invariants &amp; complexité</h2>
+  <ul>
+    <li><strong>Un seul passage</strong> du board (les lignes ne sont déplacées qu'une fois).</li>
+    <li><strong>Stable</strong>: l'ordre relatif des lignes préservées est conservé.</li>
+    <li><strong>Immutable</strong>: un nouveau board est construit; l'ancien est intact.</li>
+  </ul>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Étape</th>
+        <th style="padding:0.4rem 0.6rem">Complexité</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Détection</td><td>O(rows × COLS) = O(20×10)</td></tr>
+      <tr><td>Compaction</td><td>O(rows) = O(22)</td></tr>
+      <tr><td>Total</td><td>O(220) ≈ nano-par perf</td></tr>
+    </tbody>
+  </table>
+  <p>
+    C'est ce qui rend la manipulation rapide: même un Tétris (4 lignes) est géré
+    en un seul passage, pas en 4 décalages séparés.
+  </p>
+
+  <h2>5. Le lien avec les tests</h2>
+  <p>
+    Les cas d'école sont couverts dans
+    <a href="../src/client/engine/engine.test.ts">engine.test.ts:207</a>:
+  </p>
+  <ul>
+    <li>clear simple (1 ligne), double (2), tétris (4), et zéro (aucune).</li>
+    <li>le test « reports zero when no line is complete » vérifie que la fonction renvoie <code>cleared:0</code> <em>et un board inchangé</em>.</li>
+  </ul>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    La règle du garbage « n−1 lignes incassables » qui découle du clear est dans
+    <a href="../docs/red-tetris-spec.md">docs/red-tetris-spec.md §4</a>. La logique
+    pure (détection + compaction) est dans
+    <a href="../src/client/engine/engine.ts">engine.ts:311</a>.
+  </div>
+
+  <h2>6. Anticiper: pourquoi <code>cleared</code> est renvoyé</h2>
+  <p>
+    Regarde la signature: <code>clearLines(state): { state, cleared }</code>. C'est
+    volontairement la seule fonction qui renvoie autre chose qu'un <code>GameState</code>.
+    <code>cleared</code> alimente:
+  </p>
+  <ul>
+    <li>le report réseau (<code>linesCleared { count }</code>),</li>
+    <li>la décision de pénalité (via <code>lastCleared</code> dans le reducer).</li>
+  </ul>
+  <p>
+    Si <code>cleared === 0</code>, rien n'est envoyé (le reducer filtre avec
+    <code>if (lastCleared &gt; 0)</code>). C'est une optimisation d'éviter un aller-retour
+    réseau inutile.
+  </p>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Dans la compaction, pourquoi parcourt-on le board du bas vers le haut ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">Pour éviter d'écraser des cellules avec des lignes non copiées.</label>
+      <label><input type="radio" name="q1" value="b">Parce que le bas est plus vide que le haut.</label>
+      <label><input type="radio" name="q1" value="c">Pour économiser une copie de board.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>A.</strong> En descendant, <code>shifted</code> compte les lignes retirées <em>en dessous</em>, donc on sait toujours de combien décaler. Et comme les lignes retirées sont « sautées » (on ne les écrit pas), on n'écrase jamais une ligne non encore copiée. C'est le mécanisme de la compaction stable.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que renvoie <code>clearLines</code> si aucune ligne n'est complète ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">Un seul <code>GameState</code> (board</label>
+      <label><input type="radio" name="q1" value="b"><code>{ state, cleared: 0 }</code> avec un board inchangé.</label>
+      <label><input type="radio" name="q1" value="c"><code>null</code> pour signaler qu'il n'y a rien.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>{ state, cleared: 0 }</code> et le <code>state.board</code> retourné est <em>le même objet</em> que celui d'entrée (aucune copie inutile). C'est explicitement testé dans <code>engine.test.ts:231</code> (<code>expect(r.state.board).toEqual(s.board)</code>).</div>
+  </form>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi la ligne « pleine » peut-elle contenir du garbage <code>X</code> ?
+    Qui décide du <code>cleared</code> vers le résau ? La compaction te semblerait
+    plus lisible avec un <code>filter</code> ? Pose-moi tes questions.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0010-gravite-lock-drops.html">← Leçon 0010 — Gravité, lock &amp; drops</a>
+    <a class="next" href="0012-spectrum.html">Leçon 0012 — spectrum →</a>
+  </nav>
+</main>
+</body>
+</html>

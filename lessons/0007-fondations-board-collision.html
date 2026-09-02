@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0007 — Fondations algorithmiques: board, coordonnées, collision · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+  <style>
+    .grid { display:inline-grid; gap:2px; background:#d9d3c4; padding:2px; border:1px solid var(--code-border); }
+    .grid .g { width:22px; height:22px; background:#f3efe6; }
+    .grid .g.f { background:#b91c1c; }
+    .grid .g.p { background:#9d6cff; }
+    .grid-label { font-family:var(--mono); font-size:0.75em; color:var(--muted); margin-top:0.3rem; text-align:center; }
+    .flex-row { display:flex; gap:2rem; flex-wrap:wrap; align-items:flex-start; margin:1rem 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Fondations algorithmiques: board, coordonnées, collision</h1>
+  <p class="subtitle">Leçon 0007 · 15 min · <strong>algorithme n°1 de la série</strong></p>
+
+  <p>
+    Toute la mécanique du jeu repose sur <strong>une seule question</strong>:
+    « <em>cette pièce, à cette position et cette rotation, touche-t-elle un
+    mur ou un bloc déjà posé ?</em> » La fonction qui y répond s'appelle
+    <code>collides()</code>. Avant de voir les rotations, la gravité ou la
+    détection de lignes, il faut maîtriser <strong>les trois structures</strong>
+    qui nourrissent cette fonction: le board, la pièce, et la liste de ses minos.
+  </p>
+
+  <h2>1. Trois structures de données fondamentales</h2>
+
+  <h3>1.1 Le board — une grille 22×10</h3>
+  <pre><code>type Cell = PieceKind | 'X' | null
+board: Cell[][]   // board[row][col]</code></pre>
+  <ul>
+    <li>Indices: <code>board[r][c]</code> avec <code>r</code> = ligne (<em>row</em>, 0 en haut), <code>c</code> = colonne (<em>col</em>, 0 à gauche).</li>
+    <li>Taille: <code>TOTAL_ROWS = 22</code> lignes × <code>COLS = 10</code> colonnes.</li>
+    <li>Rangées 0–1 = <strong>buffer</strong> invisible (où les pièces apparaissent).</li>
+    <li>Rangées 2–21 = <strong>zone visible</strong> (20 rangées).</li>
+    <li>Chaque case: <code>null</code> (vide), la lettre de la pièce, ou <code>'X'</code> (garbage).</li>
+  </ul>
+
+  <p><em>Pourquoi 22 et pas 20 ?</em> Pour qu'une pièce puisse apparaître <em>au-dessus</em> du vol de l'écran et ensuite descendre dans la zone visible. Sans buffer, un spawn serait immédiatement un bloc déjà visible — moche et non-standard.</p>
+
+  <div class="flex-row">
+    <div>
+      <div class="grid" id="b1"><script>document.write([...Array(44)].map((_,i)=>{const r=Math.floor(i/10);return `<div class="g ${r<2?'f':''}"></div>`}).join(''))</script></div>
+      <div class="grid-label">Board vide: buffer (r0–1) en rouge, visible (r2–21) ci-dessous</div>
+    </div>
+    <div>
+      <div class="grid" id="b2"><script>document.write([...Array(44)].map((_,i)=>{const r=Math.floor(i/10),c=i%10;const p=(r===3&&c>=4&&c<=6)||(r===2&&c>=3&&c<=5);return `<div class="g ${p?'p':''} ${r<2?'f':''}"></div>`}).join(''))</script></div>
+      <div class="grid-label">Un T spawné: minos en violet sur le board</div>
+    </div>
+  </div>
+
+  <h3>1.2 La pièce — sa position monde</h3>
+  <pre><code>interface FallingPiece {
+  type: PieceKind   // 'I' | 'O' | 'T' ... (quelle forme)
+  state: Rotation   // 0 | 1 | 2 | 3  (quelle orientation)
+  x: number         // colonne du bord gauche de la bounding box
+  y: number         // ligne du haut de la bounding box
+  grounded: boolean // a-t-elle touché en dessous ?
+}</code></pre>
+  <p>
+    Point crucial: la pièce n'est <strong>pas</strong> stockée comme un tableau
+    de cases absolues. Elle stocke sa <em>forme logique</em> (type + rotation)
+    et un <em>point d'ancrage</em> (x, y). Les cases absolues sont recalculées à
+    la volée. C'est ce recalcul qu'on appelle <code>minos()</code>.
+  </p>
+
+  <h3>1.3 <code>minos()</code> — les coordonnées locales → monde</h3>
+  <pre><code>function minos(type, state) {
+  const shape = SHAPES[type][state]        // matrice booléenne 4x4
+  const out = []
+  for r in 0..shape.length-1
+    for c in 0..shape[r].length-1
+      if shape[r][c] then out.push({ r, c })
+  return out   // coordonnées LOCALES (relatives à la bounding box)
+}</code></pre>
+  <p>
+    Pour une pièce T en état 0, <code>minos()</code> renvoie
+    <code>[{0,1},{1,0},{1,1},{1,2}]</code> — les cellules occupées dans la
+    bounding box 3×3, indépendamment de la position <code>x,y</code>.
+  </p>
+
+  <h2>2. L'algorithme de collision — la brique universelle</h2>
+  <p>
+    Les coordonnées monde d'un mino sont:
+    <code>wx = x + c</code> (colonne absolue) et <code>wy = y + r</code>
+    (ligne absolue).
+  </p>
+  <pre><code>function collides(board, type, state, x, y) {
+  return minos(type, state).some(({ r, c }) => {
+    const wx = x + c
+    const wy = y + r
+    return (
+      wx &lt; 0 || wx &gt;= COLS ||      // hors à gauche ou à droite
+      wy &lt; 0 || wy &gt;= TOTAL_ROWS || // hors en haut ou en bas
+      board[wy][wx] !== null          // case déjà occupée
+    )
+  })
+}</code></pre>
+  <ul>
+    <li><strong>Test de borne</strong> d'abord (hors-board), puis <strong>test d'occupation</strong>.</li>
+    <li>Ordre important: on vérifie les bornes AVANT d'indexer <code>board[wy][wx]</code>, sinon <code>board[-1]</code> → bug hors-limites (c'est LE piège classique).</li>
+    <li><code>some()</code> s'arrête dès qu'un mino collide — complexité O(k) avec k ≤ 4 minos.</li>
+  </ul>
+
+  <div class="callout callout--key">
+    <strong>Invariant central</strong>
+    Une position (x, y, type, state) est <strong>valide</strong> ssi
+    <code>collides(...) === false</code>. Tous les mouvements (move, rotate, tick)
+    ne produisent <em>que</em> des positions valides — sinon ils sont rejetés
+    (retour de l'état inchangé). La collision est donc la <em>source de vérité</em>
+    unique de la géométrie.
+  </div>
+
+  <h2>3. Complexité & invariants</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Fonction</th>
+        <th style="padding:0.4rem 0.6rem">Complexité</th>
+        <th style="padding:0.4rem 0.6rem">Limite</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>minos(type, state)</code></td><td>O(4×4) = O(1)</td><td>au plus 4 minos</td></tr>
+      <tr><td><code>collides(...)</code></td><td>O(k), k ≤ 4</td><td><code>some</code> court-circuite</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><code>board</code> est <strong>lu</strong> (jamais modifié) par <code>collides</code> — elle reste pure.</li>
+    <li>Chaque appel de <code>minos()</code> reconstruit la liste. Pour 4 pièces en jeu simultané, c'est négligeable. Si la perf devenait critique, on précalculerait les 28 (<code>minos[type][state]</code>) une fois — c'est exactement ce que fait <code>SHAPES</code> pour les formes.</li>
+  </ul>
+
+  <h2>4. Le piège n°1: les bornes avant l'indexation</h2>
+  <p>
+    Si on écrivait <code>board[wy][wx] !== null</code> <em>sans</em> vérifier
+    <code>wy</code> et <code>wx</code>, une pièce remontant dans le buffer
+    (spawn y=0, minos r=0 → wy=0, ok) puis au-dessus (rotation avec un kick
+    négatif → wy=-1) lirait <code>board[-1]</code> → <code>undefined</code>,
+    et <code>undefined[wx]</code> → <strong>crash</strong>.
+  </p>
+  <pre><code>// TESTE LES BORNES AVANT, sinon crash:
+// board[-1] === undefined  →  undefined[3]  →  TypeError
+return wx&lt;0 || wx&gt;=COLS || wy&lt;0 || wy&gt;=TOTAL_ROWS || board[wy][wx]!==null</code></pre>
+  <p>
+    C'est pourquoi le test de borne précède le test d'occupation dans le <code>||</code>.
+    JS évalue de gauche à droite et <strong>s'arrête au premier true</strong>.
+  </p>
+
+  <h2>5. Visualisation tridimensionnelle de l'état</h2>
+  <p>
+    Une pièce est un point dans un espace à 3 dimensions de positions valides:
+    <code>(x, y, rotation)</code>. Chaque appel à move/rotate/tick propose une
+    <em>translation</em> dans cet espace; si la position cible est valide, on y
+    va; sinon on reste. <code>collides</code> est le « gardien » de cet espace.
+  </p>
+  <div class="diagram">
+<div class="col">
+<h4>Espace des (x, y, rot)</h4>
+y ↓
+  |  .  .  .  .  .
+  |  .  *  .  .  .
+  |  .  .  .  .  .
+  |  .  .  .  .  .
+  |  .  .  .  .  .
+  +---------------- x →
+  * = position actuelle
+  . = voisins valides (move/tick)
+</div>
+<div class="col">
+<h4>Rotation change la forme</h4>
+minos(T,0) then rotate:
+  état 0  →  état 1  →  état 2  →  état 3
+  .X.        X..        ...        ..X
+  XXX        XX.        XXX        .XX
+  ...        X..        .X.        ...
+(collision testée à chaque essai)
+</div>
+  </div>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    Relis <code>collides</code> dans
+    <a href="../src/client/engine/engine.ts">engine.ts:158</a>, puis les tests
+    <code>engine.test.ts:88</code> qui contrôlent spawn/move/lock. Ces 3 lignes
+    de <code>collides</code> sont citées par quasiment toutes les fonctions du
+    moteur.
+  </div>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que renvoie <code>board[-1][0]</code> en JS ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"><code>null</code></label>
+      <label><input type="radio" name="q1" value="b"><code>undefined</code></label>
+      <label><input type="radio" name="q1" value="c">Une <code>TypeError</code> (crash)</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>C.</strong> <code>board[-1]</code> renvoie <code>undefined</code>, puis <code>undefined[0]</code> lève une <code>TypeError</code>. C'est exactement pourquoi <code>collides</code> teste les bornes (<code>wy &lt; 0</code>, <code>wy &gt;= TOTAL_ROWS</code>, etc.) <em>avant</em> d'indexer.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien de minos contient une pièce T (tout type confondu) ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"> 2</label>
+      <label><input type="radio" name="q2" value="b"> 4</label>
+      <label><input type="radio" name="q2" value="c"> 5</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Chaque pièce est un tétromino (4 blocs). La pièce T en état 0 a bien 4 minos: <code>{0,1},{1,0},{1,1},{1,2}</code>. Le maximum est donc k=4, d'où la complexité O(4) de la collision.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>
+    Trace à la main, pour une pièce I spawnée (<code>x=3, y=0, state=0</code>) sur
+    un board vide:
+  </p>
+  <ul>
+    <li>Quelles sont les coordonnées monde des 4 minos ? <em>(rappelle-toi: le mino I est la ligne centrale, r=1, c=0..3 → wx = 3,4,5,6; wy = 1.)</em></li>
+    <li>Ce placement collide-t-il ? Pourquoi ? <em>(Non: wy=1 ≥ 0 et &lt; 22; wx dans [0,10); cases vides.)</em></li>
+    <li>Que se passe-t-il si on appelle <code>move(s, 'left')</code> 20 fois ? <em>(x descend jusqu'à être bloqué par le mur; voir test engine.test.ts:127.)</em></li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Tu veux qu'on implémente <code>collides</code> avec un <code>for</code> plutôt
+    que <code>some()</code> ? Pourquoi l'ordre des bornes est-il si crucial ici ?
+    À quoi ressemblerait une version qui précalcule <code>minos</code> ? Dis-moi
+    et je te montre une variante.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0002-le-moteur-pur.html">← Leçon 0002 — Le moteur pur</a>
+    <a class="next" href="0008-rotation-matrices.html">Leçon 0008 — Rotation &amp; matrices →</a>
+  </nav>
+</main>
+</body>
+</html>

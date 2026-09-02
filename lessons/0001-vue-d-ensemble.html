@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0001 — Vue d'ensemble: où vit quoi · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Vue d'ensemble: où vit quoi</h1>
+  <p class="subtitle">Leçon 0001 · 10 min · aucune dépendance externe à installer</p>
+
+  <p>
+    Avant de lire la moindre fonction, il faut une <em>carte</em>. Cette leçon te donne
+    celle du projet <code>42-red-tetris</code>: où sont les pièces, qui parle à qui, et
+    pourquoi cette découpe. À la fin, tu sauras nommer chaque dossier en une phrase et
+    pointer du doigt le fichier à ouvrir pour un problème donné.
+  </p>
+
+  <h2>1. Le projet en une phrase</h2>
+  <p>
+    Un Tetris multijoueur en réseau, où <strong>chaque client simule son propre terrain
+    localement</strong>, et où le <strong>serveur ne fait que distribuer les pièces et
+    collecter les spectres</strong>. Le jeu est rapide, le réseau lent, donc on déplace
+    le maximum de calcul vers le client — et le serveur devient un notaire.
+  </p>
+
+  <div class="callout callout--key">
+    <strong>Idée maîtresse</strong>
+    Le terrain (<em>field</em>) et la gravité vivent <em>uniquement</em> sur ton écran.
+    Le serveur n'a jamais ton plateau. Il ne sait pas où sont tes pièces.
+  </div>
+
+  <h2>2. Les quatre dossiers à connaître par cœur</h2>
+
+  <div class="diagram">
+<div class="col">
+<h4>src/client/</h4>Le navigateur
+  components/
+    BoardView, SpectrumView…
+  engine/
+    engine.ts  (moteur pur)
+    seed.ts    (rng)
+  screens/
+    HomeScreen, GameScreen
+  store/
+    reducer.ts (pure)
+    GameProvider.tsx
+    socketBridge.ts
+</div>
+<div class="col">
+<h4>src/server/</h4>Node + Hono + socket.io
+  domain.ts   (Player, Game — OOP)
+  socket.ts   (handlers d'événements)
+  app.ts, index.ts
+
+<h4>src/shared/</h4>Importé par les deux
+  protocol.ts  (types + events)
+  validation.ts (gardes)
+</div>
+  </div>
+
+  <ul>
+    <li><code>src/client/engine/</code> — le cœur <em>pur</em> (aucun effet de bord, aucun réseau, aucun DOM). C'est là que vivent les règles Tetris.</li>
+    <li><code>src/client/store/</code> — la mémoire de l'écran: un seul <code>useReducer</code>, plus un <code>socketBridge.ts</code> qui traduit les événements réseau en actions Redux-like.</li>
+    <li><code>src/server/</code> — l'autorité du <em>round</em>: qui est là, qui est host, qui est éliminé, quelle pièce tombe pour qui.</li>
+    <li><code>src/shared/</code> — la langue commune: les <em>types</em> des événements socket et les fonctions de validation, importés des deux côtés.</li>
+  </ul>
+
+  <h2>3. Qui parle à qui — la boucle d'un coup de touche</h2>
+  <p>
+    Prenons un exemple concret: tu appuies sur <code>←</code>. Que se passe-t-il ?
+  </p>
+  <ol>
+    <li><code>GameSession.tsx</code> capte la touche via un listener <code>keydown</code> global.</li>
+    <li>Il envoie <code>{ type: 'LOCAL_ACTION', payload: { action: 'left' } }</code> au reducer.</li>
+    <li>Le reducer appelle <code>applyAction</code> du moteur, qui retourne un nouveau <code>GameState</code>.</li>
+    <li>React re-rend <code>BoardView</code> avec la pièce décalée. <em>C'est tout.</em></li>
+    <li><strong>Le serveur n'est pas contacté pour ce mouvement.</strong> C'est un choix d'architecture fondamental, dicté par la spec.</li>
+  </ol>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    Lis <a href="https://react.dev/reference/react/useReducer">React docs — useReducer</a>
+    et <a href="https://react.dev/learn/extracting-state-logic-into-a-reducer">Extracting State Logic into a Reducer</a>
+    si le pattern « dispatch + reducer pur » est neuf pour toi. 20 minutes suffisent.
+  </div>
+
+  <h2>4. Quand le serveur entre en jeu</h2>
+  <p>Le serveur est contacté pour <em>trois familles</em> d'événements seulement:</p>
+  <ul>
+    <li><strong>Structurel</strong>: <code>join</code>, <code>leave</code>, <code>start</code>, <code>restart</code> — qui est dans la salle et à quelle phase on est.</li>
+    <li><strong>Distribution</strong>: le serveur décide qui reçoit quelle pièce (en garantissant que tous reçoivent la <em>même</em> séquence). Réponse: l'événement <code>piece</code>.</li>
+    <li><strong>Observation</strong>: après un lock, après une ligne, ou périodiquement (toutes les 2 s), tu envoies ton <em>spectre</em> (10 hauteurs de colonne) au serveur, qui le relaie aux adversaires.</li>
+  </ul>
+
+  <h2>5. La spec, ton Nord</h2>
+  <p>
+    Le fichier <a href="../docs/red-tetris-spec.md"><code>docs/red-tetris-spec.md</code></a>
+    consigne toutes les décisions verrouillées. Quand tu hésites (« est-ce que
+    le serveur doit recevoir le move ? »), la spec a la réponse. C'est l'équivalent
+    d'un contrat — les ADR (<code>docs/adr/</code>) et la carte
+    (<code>.scratch/red-tetris/map.md</code>) en sont les traces de discussion.
+  </p>
+
+  <div class="callout callout--key">
+    <strong>À retenir pour la suite</strong>
+    <ul>
+      <li>Le terrain vit <em>chez toi</em> (client), pas chez le serveur.</li>
+      <li>Le serveur est un notaire: il donne les pièces, observe les spectres, arbitre la manche.</li>
+      <li><code>src/shared/</code> est la seule chose que les deux mondes voient en commun.</li>
+      <li>Toute la spec tient dans un seul fichier à consulter avant de coder.</li>
+    </ul>
+  </div>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Où vit la gravité qui fait tomber les pièces ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> Dans <code>src/server/domain.ts</code>, pilotée par socket.io.</label>
+      <label><input type="radio" name="q1" value="b"> Dans <code>src/client/engine/engine.ts</code>, déclenchée par <code>GameSession</code>.</label>
+      <label><input type="radio" name="q1" value="c"> Partagée entre client et serveur via <code>src/shared/protocol.ts</code>.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> La gravité est une fonction pure <code>tick()</code> dans <code>engine.ts</code>, invoquée à intervalle régulier (rAF, ~500 ms) par <code>GameSession.tsx</code> côté navigateur. Le serveur n'a jamais la gravité — il ne connaît pas la position de tes pièces.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Quel dossier est importé par <em>les deux</em> tsconfig ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"><code>src/client/</code></label>
+      <label><input type="radio" name="q2" value="b"><code>src/server/</code></label>
+      <label><input type="radio" name="q2" value="c"><code>src/shared/</code></label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>C.</strong> Seuls les types et la validation sont partagés. Le code métier (engine, reducer, domain, socket) est strictement séparé entre client et serveur, pour empêcher une fuite d'API impure dans le mauvais monde.</div>
+  </form>
+
+  <h2>Pour aller plus loin</h2>
+  <p>
+    Ouvre maintenant <a href="../docs/red-tetris-spec.md"><code>docs/red-tetris-spec.md</code></a>
+    en entier, puis <code>src/client/main.tsx</code> et <code>src/server/index.ts</code> — tu
+    verras par où l'app démarre des deux côtés. C'est le bon point de bascule vers la
+    <a href="0002-le-moteur-pur.html">leçon 0002 — le moteur pur</a>.
+  </p>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Quelque chose te semble flou ? La séparation client/serveur ? Le choix de
+    <code>useReducer</code> plutôt que Redux ? Pourquoi 22 rangées internes et
+    pas 20 ? Pose ta question — on ajuste la prochaine leçon à ta zone.
+  </div>
+
+  <nav class="nav">
+    <span class="prev"></span>
+    <a class="next" href="0002-le-moteur-pur.html">Leçon 0002 — Le moteur pur →</a>
+  </nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0015 — Machine d'états du serveur · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Machine d'états du serveur (round, host, aliveCount)</h1>
+  <p class="subtitle">Leçon 0015 · 18 min · <strong>algorithme n°10 — la gestion de la partie côté serveur</strong></p>
+
+  <p>
+    Côté serveur, le <code>Game</code> est une <strong>machine à états finis</strong>.
+    Cette leçon décompose les transitions d'état (<code>waiting → running →
+    finished</code>), les décisions d'élection du host, et la règle unifiée de
+    fin de manche. C'est l'algorithme de plus haut niveau du projet — il orchestre
+    tout le reste.
+  </p>
+
+  <h2>1. La machine à trois états</h2>
+  <div class="diagram">
+<div class="col">
+<h4>waiting</h4>
+- joueurs admis (join)
+- host défini
+- start() → running
+</div>
+<div class="col">
+<h4>running</h4>
+- joins REFUSÉS
+- pièces distribuées
+- topOut → élimination
+</div>
+<div class="col">
+<h4>finished</h4>
+- joins ré-admis
+- restart() → running
+- round++
+  players.reset()
+</div>
+  </div>
+  <p>
+    <code>GameStatus</code> est une union (définie dans
+    <a href="../src/shared/protocol.ts"><code>protocol.ts:5</code></a>):
+    <code>'waiting' | 'running' | 'finished'</code>.
+  </p>
+
+  <h2>2. Les transitions de base</h2>
+  <pre><code>start(): boolean {
+  if (this.status !== 'waiting') return false  // garde
+  this.beginRound()
+  return true
+}
+restart(): boolean {
+  if (this.status !== 'finished') return false  // garde
+  this.beginRound()
+  return true
+}
+beginRound() {
+  this.status = 'running'
+  this.round += 1
+  for (const p of this.players.values()) {
+    p.eliminated = false    // reset
+    p.nextIndex = 0
+  }
+}</code></pre>
+  <ul>
+    <li><code>start()</code> seulement depuis <code>waiting</code> (appelé par le host au début).</li>
+    <li><code>restart()</code> seulement depuis <code>finished</code> (appelé par le host après la fin).</li>
+    <li>Chaque retour <code>false</code> = transition invalide → le socket envoie un <code>error</code>.</li>
+    <li><code>beginRound()</code> (privée) remet <em>tous</em> les joueurs à zéro (élimination + index de séquence) et incrémente <code>round</code>.</li>
+  </ul>
+
+  <div class="callout callout--key">
+    <strong>Les guards internes</strong>
+    Chaque <code>if (this.status !== X) return false</code> est une <em>garde</em>:
+    elle garantit qu'on ne peut pas appeler <code>start()</code> en plein jeu ou
+    <code>restart()</code> avant la fin. C'est la protection contre les transitions
+    invalides de la machine. La spec (issue 06) a explicitement corrigé
+    <code>start()</code> de « !== running » à « === waiting » pour serrer cette garde.
+  </div>
+
+  <h2>3. L'élection du host</h2>
+  <pre><code>addPlayer(...) {
+  const wasEmpty = this.playerCount() === 0
+  const player = new Player(name, socketId, wasEmpty)   // wasEmpty → isHost
+  this.players.set(socketId, player)
+  if (wasEmpty) this.hostId = socketId
+  return player
+}
+
+removePlayer(socketId) {
+  this.players.delete(socketId)
+  if (this.hostId === socketId) {                    // le host est parti
+    this.hostId = this.players.keys().next().value ?? null  // prochain
+    const next = this.hostId !== null ? this.players.get(this.hostId) : undefined
+    if (next) next.isHost = true                     // il devient host
+  }
+}</code></pre>
+  <ul>
+    <li><strong>Premier joueur</strong> d'une room vide = host (<code>wasEmpty → isHost</code>).</li>
+    <li><strong>Réélection</strong> : si le host part, le premier restant dans l'ordre d'insertion devient host.</li>
+    <li>Si la room devient vide, <code>hostId = null</code> (et la room sera nettoyée).</li>
+  </ul>
+  <p>
+    L'index de réélection (<code>players.keys().next().value</code>) est « le premier
+    dans l'ordre d'insertion dans le <code>Map</code> » — un ordre déterministe et
+    stable. C'est une stratégie simple qui suffit ici.
+  </p>
+
+  <h2>4. La règle unifiée de fin de manche — <code>aliveCount</code></h2>
+  <p>
+    La fin d'un round se décide par un compteur: le nombre de joueurs
+    <em>non-éliminés</em>. La règle est <strong>unifiée</strong> (décision 06): que
+    ce soit un topOut <em>ou</em> un départ, dès qu'il reste 1 joueur vivant (ou 0
+    en solo), la partie s'arrête.
+  </p>
+  <pre><code>aliveCount(): number {
+  return [...this.players.values()].filter((p) =&gt; !p.eliminated).length
+}
+
+topOut(socketId) {
+  const p = this.players.get(socketId)
+  if (!p || p.eliminated || this.status !== 'running') return null  // garde
+  p.eliminated = true
+  if (this.aliveCount() &gt; 1) return null      // toujours ≥ 2 vivants
+  this.status = 'finished'
+  const survivor = [...this.players.values()].find((p) =&gt; !p.eliminated)
+  return { winner: survivor?.name ?? null }    // solo → winner null
+}</code></pre>
+  <p>
+    Le même <code>aliveCount() &lt;= 1</code> est vérifié dans
+    <code>removePlayer()</code> (socket.ts) quand un joueur se déconnecte en pleine
+    manche. Résultat: une seule règle gère les deux causes de finition.
+  </p>
+
+  <h2>5. Le <code>winner</code> — solo vs multi</h2>
+  <ul>
+    <li><strong>Multi</strong>: le dernier non-éliminé est <code>winner</code> = son nom.</li>
+    <li><strong>Solo</strong>: s'il n'y a qu'un seul joueur (ou que tous sont éliminés),
+      <code>winner = null</code>. Le client affiche un « game over » neutre.</li>
+  </ul>
+  <p>
+    <code>survivor?.name ?? null</code> gère les deux cas d'une seule ligne: s'il
+    n'y a aucun survivant vivant (ex: un joueur solo qui top-out), <code>survivor</code>
+    est <code>undefined</code> → <code>winner = null</code>.
+  </p>
+
+  <h2>6. La distribution des pièces — <code>pieceFor</code> et la séquence</h2>
+  <pre><code>pieceFor(socketId) {
+  const p = this.players.get(socketId)
+  if (!p || p.eliminated) return null
+  const index = p.nextIndex
+  this.ensureSequence(index + 1 + HORIZON_LENGTH)   // pré-génère au besoin
+  const next = ...sequence slice...
+  p.nextIndex += 1
+  return { type: this.sequence[index], index, next }
+}</code></pre>
+  <ul>
+    <li><strong>Même séquence</strong>: chaque joueur lit le même tableau
+      <code>this.sequence</code>, mais à son propre <code>nextIndex</code>.</li>
+    <li><strong>Horizon</strong>: on envoie aussi les 3 prochaines pièces
+      (<code>HORIZON_LENGTH</code>) pour l'affichage « next » du client.</li>
+    <li><strong>Pré-génération paresseuse</strong>: <code>ensureSequence</code> étend
+      la séquence (via le 7-bag) seulement si besoin — on ne génère pas 1000 pièces
+      d'avance.</li>
+  </ul>
+  <p>
+    Chaque joueur qui fait un <code>lock</code> déclenche un <code>pieceFor</code>
+    qui lui avance son index. Deux joueurs au même index reçoivent donc la même
+    pièce — c'est la garantie « mêmes positions/coordonnées » du sujet.
+  </p>
+
+  <h2>7. Résumé des guards</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Méthode</th>
+        <th style="padding:0.4rem 0.6rem">Garde</th>
+        <th style="padding:0.4rem 0.6rem">Sur refus</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>start()</code></td><td>status === 'waiting'</td><td>error</td></tr>
+      <tr><td><code>restart()</code></td><td>status === 'finished'</td><td>error</td></tr>
+      <tr><td><code>topOut()</code></td><td>joueur existe, non-eliminé, running</td><td>no-op silencieux</td></tr>
+      <tr><td><code>pieceFor()</code></td><td>joueur existe, non-eliminé</td><td>null</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    La machine d'états serveur (round/élimination/réélection/restart/admission) a
+    été verrouillée dans l'issue 06 de la carte:
+    <a href="../.scratch/red-tetris/issues/06-grilling-round-flow.md">06-grilling-round-flow</a>,
+    et synthétisée dans la spec
+    <a href="../docs/red-tetris-spec.md">§5</a>. Le code: <a href="../src/server/domain.ts"><code>domain.ts</code></a>.
+  </div>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Depuis quel état peut-on appeler <code>restart()</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">waiting</label>
+      <label><input type="radio" name="q1" value="b">running</label>
+      <label><input type="radio" name="q1" value="c">finished</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>C.</strong> <code>restart()</code> exige <code>status === 'finished'</code>. C'est la garde qui empêche de « tuer » une manche en cours. <code>start()</code>, lui, exige <code>waiting</code>.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que vaut <code>winner</code> quand le seul joueur d'une room top-out ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">Son propre nom.</label>
+      <label><input type="radio" name="q1" value="b"><code>null</code>.</label>
+      <label><input type="radio" name="q1" value="c">Une chaîne vide.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> <code>survivor?.name ?? null</code> → s'il n'y a pas de survivant vivant (solo qui top-out), <code>survivor</code> vaut <code>undefined</code> donc <code>winner = null</code>. C'est le signe d'un « game over » neutre.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>
+    Trace avec 3 joueurs A, B, C (A host) en <code>running</code>:
+  </p>
+  <ul>
+    <li>B top-out → que devient <code>aliveCount()</code> et <code>status</code> ? <em>(aliveCount=2, toujours running.)</em></li>
+    <li>C quitte la manche → que se passe-t-il ? <em>(A est le seul vivant; removePlayer appelle la règle `aliveCount()&lt;=1` → finished, winner=A.)</em></li>
+    <li>Qui devient host si A était host et part <em>après</em> la manche ? <em>(le premier joueur restant, B ou C.)</em></li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi distinguer « élimination » et « départ » si la règle de fin est unifiée ?
+    La réélection du host par ordre d'insertion est-elle toujours juste ?
+    Comment gérerait-on un serveur multi-rooms avec des états indépendants ? Pose-moi
+    tes questions.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0014-prng-7bag.html">← Leçon 0014 — PRNG &amp; 7-bag</a>
+    <span class="next">Fin du parcours algorithmes</span>
+  </nav>
+</main>
+</body>
+</html>

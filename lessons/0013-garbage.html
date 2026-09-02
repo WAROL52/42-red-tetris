@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0013 — Garbage: makeGarbageRow + applyGarbage · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Garbage: <code>makeGarbageRow</code> + <code>applyGarbage</code></h1>
+  <p class="subtitle">Leçon 0013 · 18 min · <strong>algorithme n°7</strong></p>
+
+  <p>
+    C'est la mécanique <em>multijoueur</em> par excellence: quand tu élimines des
+    lignes, tes adversaires reçoivent <strong>n−1 rangées de déchets</strong>
+    incassables en bas de leur terrain. Deux algorithmes distincts:
+    <code>makeGarbageRow</code> (fabriquer une ligne « piégée ») et
+    <code>applyGarbage</code> (insérer des lignes dans un board, avec lock forcé
+    préalable).
+  </p>
+
+  <h2>1. <code>makeGarbageRow</code> — une ligne incassable</h2>
+  <pre><code>function makeGarbageRow(rng) {
+  const hole = Math.floor(rng() * COLS)   // colonne du trou
+  const row = new Array(COLS).fill(true)  // 10 cellules pleines
+  row[hole] = false                        // ...sauf le trou
+  return row                               // boolean[10]
+}</code></pre>
+  <ul>
+    <li>9 cellules <code>true</code>, 1 cellule <code>false</code> (le trou).</li>
+    <li><strong>Le trou est crucial</strong>: une ligne avec un trou ne peut <em>jamais</em> être complète (il faudrait remplir 10 cases pleines; le trou reste vide). Donc le garbage est « indestructible ».</li>
+    <li><code>rng()</code> est <em>injectable</em> — en test on passe une fonction déterministe (<code>() =&gt; 0.5</code>) pour figer la colonne du trou.</li>
+  </ul>
+
+  <div class="callout callout--key">
+    <strong>Pourquoi le trou rend-il la ligne incassable ?</strong>
+    <code>isFullRow</code> exige 10 cellules non-<code>null</code>. Une ligne de
+    garbage a <em>toujours</em> un trou. Or une pièce ne peut pas combler ce trou
+    sans laisser une case — la ligne ne sera jamais pleine, elle ne disparaîtra
+    donc jamais. Voilà comment on fabrique un déchet « éternel ».
+  </div>
+
+  <h2>2. <code>applyGarbage</code> — deux phases en séquence</h2>
+  <p>Le moment où le garbage arrive, une pièce est peut-être en train de tomber. Il faut d'abord la figer, puis insérer les rangées.</p>
+
+  <pre><code>function applyGarbage(state, rows) {
+  let merged = state
+  if (merged.piece !== null) {
+    merged = lockPiece(merged)        // phase 1 : lock forcé
+  }
+  if (rows.length === 0) return merged  // pas de ligne → no-op
+
+  // phase 2 : insertion par le bas + shift vers le haut
+  const board = emptyBoard()
+  for (let r = 0; r + rows.length &lt; TOTAL_ROWS; r++) {
+    for (let c = 0; c &lt; COLS; c++) {
+      board[r][c] = merged.board[r + rows.length][c]   // copie décalée vers le haut
+    }
+  }
+  for (let i = 0; i &lt; rows.length; i++) {
+    const target = TOTAL_ROWS - rows.length + i        // lignes du bas
+    for (let c = 0; c &lt; COLS; c++) {
+      board[target][c] = rows[i][c] ? GARBAGE : null   // remplit avec 'X' ou trou
+    }
+  }
+  return { ...merged, board }
+}</code></pre>
+
+  <h3>2.1 Phase 1 — Lock forcé de la pièce en cours</h3>
+  <p>
+    Pourquoi ? Parce qu'on ne peut pas insérer des lignes par en dessous <em>pendant</em>
+    qu'une pièce est en l'air — elle serait dans un monde parallèle. On la pose
+    d'abord (<code>lockPiece</code>), ce qui peut <em>elle-même</em> créer des lignes
+    pleines (mais on ne les clear pas ici; le clear est une étape séparée du reducer).
+  </p>
+
+  <h3>2.2 Phase 2 — Insertion + shift</h3>
+  <p>
+    C'est une <strong>compaction inverse</strong> de <code>clearLines</code>:
+  </p>
+  <ol>
+    <li>On copie le board <em>par le bas</em>, décalé de <code>rows.length</code> vers le haut.</li>
+    <li>On remplit les <code>rows.length</code> dernières rangées avec les lignes de garbage.</li>
+  </ol>
+  <p>
+    Plaçons-nous avec 1 ligne de garbage sur un board vide:
+  </p>
+  <pre><code>AVANT (3 colonnes pour l'exemple):     APRÈS:
+  . . .                                . 0 0   ← le contenu est poussé vers le haut
+  . . .                                0 0 0
+  . . .   ← on insère en bas            0 0 0
+  (plancher)                            X X .   ← garbage (trou en colonne 2)
+</code></pre>
+  <ul>
+    <li>Tout ce qui était au-dessus monte de <code>k</code> cases.</li>
+    <li>Ce qui dépasse <strong>au-dessus du buffer</strong> est perdu (overflow) — c'est un top-out implicite pour les colonnes très pleines.</li>
+  </ul>
+
+  <h2>3. L'overflow — quand la pile n'a plus de place</h2>
+  <p>
+    La boucle <code>for r &lt; TOTAL_ROWS - rows.length</code> copie au plus
+    <code>TOTAL_ROWS - rows.length</code> rangées. Les rangées du <em>haut</em> du
+    board d'origine sont <em>tronquées</em> (pas copiées). Donc si tu as 19 rangées
+    pleines et qu'on insère 3 lignes de garbage, les 3 du haut débordent et
+    disparaissent. C'est la « baseline » du top-out.
+  </p>
+  <p>
+    Le test <code>engine.test.ts:308</code> le vérifie: avec 20 rangées pleines +
+    3 lignes de garbage, la colonne compte <code>19 + 3 = 22</code> blocs, et les
+    cases du haut (<code>board[0][4]</code>, <code>board[1][4]</code>) sont vides —
+    le débordement a été tronqué proprement.
+  </p>
+
+  <h2>4. Complexité</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Étape</th>
+        <th style="padding:0.4rem 0.6rem">Complexité</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>makeGarbageRow</code></td><td>O(COLS) = O(10)</td></tr>
+      <tr><td>Lock forcé</td><td>O(220)</td></tr>
+      <tr><td>Copy décalée</td><td>O((22−k) × 10)</td></tr>
+      <tr><td>Remplissage garbage</td><td>O(k × 10)</td></tr>
+      <tr><td>Total</td><td>O(220) constant borné</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Le flux réseau complet</h2>
+  <p>
+    Rappelle-toi du serveur: le serveur ne stocke <em>pas</em> le garbage; il relaie.
+    Le client, lui, reconstruit les rangées via <code>makeGarbageRow</code> et les
+    applique via <code>applyGarbage</code> dans son reducer:
+  </p>
+  <pre><code>// reducer.ts — 'OPPONENT_LINES'
+const rows = Array.from(
+  { length: lines },
+  () =&gt; makeGarbageRow(rng)              // lines = count - 1
+)
+return { ...state, engine: applyGarbage(state.engine, rows) }</code></pre>
+  <p>
+    Le rng est <em>seédé</em> (<code>mulberry32(seed + garbageIncoming)</code>) pour
+    que la position des trous soit déterministe et rejouable en test.
+  </p>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    Toute la sémantique garbage + spectre est verrouillée dans
+    <a href="../docs/red-tetris-spec.md">docs/red-tetris-spec.md §4</a> (issue 05 de
+    la carte). L'implémentation engine est dans
+    <a href="../src/client/engine/engine.ts">engine.ts:368</a> et
+    <a href="../src/client/engine/engine.ts">engine.ts:380</a>.
+  </div>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien de trous (<code>false</code>) contient une <code>GarbageRow</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">0</label>
+      <label><input type="radio" name="q1" value="b">1</label>
+      <label><input type="radio" name="q1" value="c">9</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Exactement 1 trou (colonne aléatoire) sur 10. Différence: 9 cellules <code>true</code>, 1 <code>false</code>. Le trou garantit que la ligne ne peut jamais être complète.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Que fait <code>applyGarbage</code> si une pièce est en train de tomber ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a">Il fait passer la pièce en <code>grounded</code> et continue.</label>
+      <label><input type="radio" name="q1" value="b">Il lock (fige) la pièce avant d'insérer.</label>
+      <label><input type="radio" name="q1" value="c">Il ignore le garbage tant que la pièce tombe.</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B.</strong> Phase 1 : <code>if (merged.piece !== null) merged = lockPiece(merged)</code>. On fige la pièce active avant d'insérer, sinon elle serait dans un monde parallèle quand la pile remonte.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>
+    Simule : board vide (zone visible), appeler <code>applyGarbage(board, [row1, row2])</code>
+    avec 2 lignes de garbage. Trace:
+  </p>
+  <ul>
+    <li>À quelles lignes finissent <code>row1</code> et <code>row2</code> ? <em>(target = TOTAL_ROWS − 2 + i → les 2 dernières: 20 et 21.)</em></li>
+    <li>Combien de rangées vides restent au-dessus ? <em>(20 − 2 = 18 rangées vides en haut.)</em></li>
+    <li>Que se passe-t-il si on insère 22 lignes de garbage ? <em>(Tout l'ancien board est écrasé; seules les 22 lignes de garbage restent. C'est un top-out complet.)</em></li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi <code>n−1</code> et pas <code>n</code> lignes de pénalité ? Comment le
+    seed déterministe du rng garantit-il la rejouabilité ? Pourquoi le garbage n'est
+    il pas stocké côté serveur ? Pose-moi tes questions.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0012-spectrum.html">← Leçon 0012 — spectrum</a>
+    <a class="next" href="0014-prng-7bag.html">Leçon 0014 — PRNG &amp; 7-bag →</a>
+  </nav>
+</main>
+</body>
+</html>

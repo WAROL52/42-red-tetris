@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Leçon 0004 — Le store client (useReducer + socketBridge) · 42 Red Tetris</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../assets/stylesheet.css">
+</head>
+<body>
+<main>
+  <h1>Le store client (<code>useReducer</code> + <code>socketBridge</code>)</h1>
+  <p class="subtitle">Leçon 0004 · 15 min · ouvrir <code>src/client/store/</code> en parallèle</p>
+
+  <p>
+    Le « store » est en fait <strong>trois fichiers</strong> très petits qui se
+    partagent le travail: un <em>reducer pur</em>, un <em>adaptateur socket
+    impur</em>, et un <em>provider</em> qui les relie. Cette leçon te montre
+    comment ils collaborent pour transformer un événement réseau en un nouveau
+    rendu React.
+  </p>
+
+  <h2>1. Pourquoi <code>useReducer</code> et pas Redux</h2>
+  <p>
+    Le projet est de taille modeste (une seule feature, un seul écran principal).
+    Redux serait du sur-équipement. La spec §3 a tranché pour
+    <code>useReducer</code> + Context, et l'
+    <a href="../docs/adr/0001-hooks-over-redux.md">ADR 0001</a>
+    documente le raisonnement. Trois bénéfices concrets:
+  </p>
+  <ul>
+    <li><strong>Pas de dépendance</strong> (<code>react-redux</code>, <code>@reduxjs/toolkit</code>) — bundle plus léger, surface API plus petite.</li>
+    <li><strong>Le reducer <em>est</em> la transition pure</strong> — pas de middleware à composer pour avoir un état testable.</li>
+    <li><strong>Un seul fichier</strong> (<code>reducer.ts</code>, 227 lignes) — tu peux tout lire en une fois.</li>
+  </ul>
+
+  <h2>2. <code>reducer.ts</code> — la transition pure</h2>
+  <p>
+    Forme: <code>(state: RootState, action: Action) => RootState</code>. Pas de
+    side-effects, pas de réseau, pas de <code>Math.random()</code>. Tout est
+    déclaratif.
+  </p>
+
+  <h3>2.1 La forme de l'état</h3>
+  <pre><code>interface RootState {
+  room, playerName, socketId, connected    // identité session
+  status: GameStatus                       // 'waiting' | 'running' | 'finished'
+  round, players, winner, eliminated       // état de la partie
+  engine: GameState                        // délégation au moteur pur
+  queue, currentIndex                      // file de pièces
+  garbageSeed, garbageIncoming             // rng pour les garbage rows
+  justLocked, lastCleared                  // flags de report
+}</code></pre>
+
+  <h3>2.2 Les actions — deux familles</h3>
+  <p>14 actions au total, réparties en deux familles:</p>
+  <ul>
+    <li><strong>Locales</strong> (3): <code>GRAVITY_TICK</code>, <code>LOCAL_ACTION</code>, <code>REPORT_SENT</code> — déclenchées par le clavier ou le rAF.</li>
+    <li><strong>Réseau</strong> (11): <code>SOCKET_CONNECTED</code>, <code>SOCKET_DISCONNECTED</code>, <code>ROOM_STATE</code>, <code>PLAYER_JOINED</code>, <code>PLAYER_LEFT</code>, <code>PLAYER_ELIMINATED</code>, <code>HOST_CHANGED</code>, <code>PLAYER_SPECTRUM</code>, <code>GAME_STARTED</code>, <code>PIECE</code>, <code>OPPONENT_LINES</code>, <code>GAME_OVER</code>.</li>
+  </ul>
+
+  <div class="callout callout--key">
+    <strong>Le mapping 1-pour-1</strong>
+    Chaque <code>ServerToClientEvent</code> a son action Redux-like. C'est le
+    <em>seul</em> travail du <code>socketBridge</code> : traduire « événement
+    socket typé » en « action typée » et l'envoyer à <code>dispatch</code>.
+  </div>
+
+  <h2>3. <code>socketBridge.ts</code> — le seul fichier impur du store</h2>
+  <p>
+    Tout <code>io(url, ...)</code>, <code>socket.on(...)</code>,
+    <code>socket.emit(...)</code> vit ici. C'est <em>la seule</em> face impure du
+    store — tout le reste est pur et testable. Tu peux remplacer
+    <code>socketBridge</code> par un mock en test, ce qui rend le reducer et le
+    provider testables à 100 %.
+  </p>
+
+  <pre><code>export function createSocketBridge(url, handlers) {
+  const socket = io(url, { transports: ['websocket'] })
+  socket.on('piece', (p) => handlers.onPiece(p))   // ...11 handlers
+  return {
+    emit: (event, ...args) => socket.emit(event, ...args),
+    close: () => socket.disconnect(),
+  }
+}</code></pre>
+
+  <p>
+    Le typage est strict : <code>emit</code> n'accepte que des clés de
+    <code>ClientToServerEvents</code>, et chaque appel a les bons paramètres
+    TypeScript. Impossible d'émettre un événement non défini dans le protocole.
+  </p>
+
+  <h2>4. <code>GameProvider.tsx</code> — la colle</h2>
+  <p>
+    Le Provider fait <em>trois choses</em> en utilisant <code>useEffect</code>:
+  </p>
+  <ol>
+    <li><strong>Monter le socket</strong> au mount, brancher les 11 handlers vers <code>dispatch</code>, émettre <code>join</code>.</li>
+    <li><strong>Détecter les reports à envoyer</strong> après un lock (effet sur <code>[state]</code>): si <code>justLocked</code>, émettre <code>lock</code> + <code>linesCleared</code> si besoin.</li>
+    <li><strong>Heartbeat spectre</strong> toutes les 2 s (effet sur <code>[state.status, state.engine.over]</code>): ne réémet que si le spectre a changé (diff des 10 valeurs).</li>
+  </ol>
+
+  <h3>4.1 Pourquoi le heartbeat est <em>gated</em></h3>
+  <pre><code>if (previous.length !== current.length || previous.some((v, i) => v !== current[i])) {
+  bridge.emit('spectrumHeartbeat', { spectrum: current })
+}</code></pre>
+  <p>
+    Le serveur relaie le spectre à <em>tous les autres</em>. Si rien n'a bougé,
+    on s'abstient — ça évite N×N messages inutiles par seconde. C'est un
+    trade-off explicite documenté dans la spec §4.
+  </p>
+
+  <h3>4.2 Pourquoi 3 <code>useEffect</code> séparés</h3>
+  <ul>
+    <li><strong>Effet #1</strong> (dépendances: <code>[room, playerName, url, createBridge]</code>) — un seul cycle de vie : mount/unmount. Le socket vit avec le composant.</li>
+    <li><strong>Effet #2</strong> (dépendances: <code>[state]</code>) — relit l'état après chaque dispatch pour réagir aux flags <code>justLocked</code> et <code>engine.over</code>.</li>
+    <li><strong>Effet #3</strong> (dépendances: <code>[state.status, state.engine.over]</code>) — le <code>setInterval</code> redémarre quand la phase change.</li>
+  </ul>
+
+  <h2>5. <code>useStore()</code> — l'API publique</h2>
+  <p>
+    Les composants ne touchent jamais <code>reducer</code> ou
+    <code>socketBridge</code> directement. Ils utilisent le hook
+    <a href="../src/client/store/GameProvider.tsx"><code>useStore()</code></a>
+    qui renvoie <code>{ state, dispatch, send }</code>.
+  </p>
+  <ul>
+    <li><code>state</code> — l'état actuel. Les composants lisent les slices qui les intéressent (BoardView lit <code>state.engine</code>, QueueNext lit <code>state.queue</code>).</li>
+    <li><code>dispatch(action)</code> — pour les actions locales (<code>LOCAL_ACTION</code>, <code>GRAVITY_TICK</code>).</li>
+    <li><code>send(event, ...args)</code> — pour les émissions réseau directes (par exemple <code>send('start')</code>, <code>send('restart')</code>).</li>
+  </ul>
+
+  <div class="callout callout--src">
+    <strong>Source primaire</strong>
+    <a href="https://react.dev/learn/extracting-state-logic-into-a-reducer">React docs — Extracting State Logic into a Reducer</a>
+    pour la philosophie du reducer, et l'
+    <a href="../docs/adr/0001-hooks-over-redux.md">ADR 0001 — hooks-over-redux</a>
+    local pour le choix appliqué à ce projet.
+  </div>
+
+  <h2>6. Mini-tableau — qui fait quoi</h2>
+  <table style="width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.95em">
+    <thead>
+      <tr style="border-bottom:1px solid var(--rule);text-align:left">
+        <th style="padding:0.4rem 0.6rem">Fichier</th>
+        <th style="padding:0.4rem 0.6rem">Pur ?</th>
+        <th style="padding:0.4rem 0.6rem">Rôle</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>reducer.ts</code></td><td>Oui</td><td>14 actions, transition pure</td></tr>
+      <tr><td><code>socketBridge.ts</code></td><td>Non (impur)</td><td>Seul point qui parle à socket.io</td></tr>
+      <tr><td><code>GameProvider.tsx</code></td><td>Non (effets React)</td><td>Monte socket + gère heartbeat + reports</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Mini-quiz</h2>
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Combien d'<code>useEffect</code> contient <code>GameProvider.tsx</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q1" value="a"> Un seul (tout dedans).</label>
+      <label><input type="radio" name="q1" value="b"> Deux (socket et heartbeat).</label>
+      <label><input type="radio" name="q1" value="c"> Trois (socket, reports après lock, heartbeat).</label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>C.</strong> Trois <code>useEffect</code> : mount du socket, réaction aux flags <code>justLocked</code>/<code>engine.over</code> après chaque dispatch, et interval de heartbeat spectre. Chacun a ses dépendances adaptées à son cycle de vie.</div>
+  </form>
+
+  <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">
+    <legend>Quel fichier est <em>impur</em> dans <code>src/client/store/</code> ?</legend>
+    <div class="opts">
+      <label><input type="radio" name="q2" value="a"><code>reducer.ts</code></label>
+      <label><input type="radio" name="q2" value="b"><code>socketBridge.ts</code></label>
+      <label><input type="radio" name="q2" value="c"><code>GameProvider.tsx</code></label>
+    </div>
+    <button type="submit" class="reveal">Voir la réponse</button>
+    <div class="answer"><strong>B</strong> (et <strong>C</strong> par nature). <code>socketBridge.ts</code> est explicitement marqué « impure adapter » et c'est le seul fichier qui appelle <code>io()</code>. <code>GameProvider.tsx</code> est impur lui aussi (effets React), mais il ne touche pas directement à socket.io : il passe par le bridge.</div>
+  </form>
+
+  <h2>Micro-exercice</h2>
+  <p>Dans <code>reducer.ts</code>, trouve les actions que tu n'aurais <em>jamais</em> dans une app sans réseau :</p>
+  <ul>
+    <li><code>ROOM_STATE</code> (joueur qui rejoint une partie déjà en cours)</li>
+    <li><code>PLAYER_SPECTRUM</code> (mise à jour distante du spectre d'un autre joueur)</li>
+    <li>…et <em>3 autres</em> au moins, à toi de les trouver.</li>
+  </ul>
+
+  <div class="callout callout--ask">
+    <strong>Demande à l'agent</strong>
+    Pourquoi le Provider n'est-il pas splitté en plusieurs contextes (un pour
+    l'état, un pour le send) ? Pourquoi pas <code>useSyncExternalStore</code> ?
+    Que se passerait-il si on extrayait les selectors dans des hooks séparés ?
+    Dis-moi, je peux découper une variante.
+  </div>
+
+  <nav class="nav">
+    <a class="prev" href="0003-le-protocole-partage.html">← Leçon 0003 — Le protocole partagé</a>
+    <a class="next" href="0005-le-serveur.html">Leçon 0005 — Le serveur →</a>
+  </nav>
+</main>
+</body>
+</html>
