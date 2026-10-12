@@ -28,8 +28,9 @@ export interface RootState {
   garbageIncoming: number
   justLocked: boolean
   lastCleared: number
+  penalityLines:number
 }
-
+ 
 export type Action =
   | { type: 'SOCKET_CONNECTED'; id: string }
   | { type: 'SOCKET_DISCONNECTED' }
@@ -74,6 +75,7 @@ export function initialState(room: string, playerName: string): RootState {
     garbageIncoming: 0,
     justLocked: false,
     lastCleared: 0,
+	penalityLines:0
   }
 }
 
