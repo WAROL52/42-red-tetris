@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Red Tetris</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik+Mono+One&family=Rubik:wght@700;900&display=swap">
+<style>
+  :root {
+    --red: #9b111e;
+    --red-dark: #2b0a0f;
+    --choco: #2a120a;
+    --cream: #fff1d6;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #000;
+    background-image:
+      linear-gradient(var(--red-dark) 2px, transparent 2px),
+      linear-gradient(90deg, var(--red-dark) 2px, transparent 2px);
+    background-size: 48px 48px;
+    font-family: "Rubik", system-ui, sans-serif;
+    font-weight: 900;
+    color: var(--cream);
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+
+  main { width: 100%; max-width: 420px; }
+
+  h1 {
+    font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
+    font-size: clamp(2.2rem, 11vw, 3.6rem);
+    line-height: .95;
+    text-transform: uppercase;
+    text-align: center;
+    margin: 0 0 28px;
+    color: var(--cream);
+    text-shadow: 5px 5px 0 var(--red);
+  }
+
+  /* La carte : tablette de chocolat entière */
+  .card {
+    position: relative;
+    padding: 36px 28px 32px;
+    border: 5px solid var(--choco);
+    border-radius: 6px;
+    box-shadow: 10px 10px 0 var(--red);
+    isolation: isolate;
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    z-index: -1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Crect width='90' height='90' fill='%232a120a'/%3E%3Crect x='6' y='6' width='78' height='78' rx='4' fill='%23703a22'/%3E%3Cpath d='M6 6h78l-10 10H16v58L6 84z' fill='%23864828'/%3E%3Cpath d='M84 84H6l10-10h58V16l10-10z' fill='%2348220f'/%3E%3Crect x='16' y='16' width='58' height='58' fill='%23703a22'/%3E%3C/svg%3E");
+    background-size: 90px 90px;
+    border-radius: 6px;
+  }
+
+  form { display: grid; gap: 22px; }
+
+  label { display: grid; gap: 8px; font-size: 1.05rem; }
+
+  input {
+    font: inherit;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--choco);
+    background: var(--cream);
+    border: 4px solid var(--choco);
+    border-radius: 4px;
+    padding: 12px 14px;
+    outline: none;
+  }
+  input::placeholder { color: #a08060; font-weight: 700; }
+  input:focus-visible { border-color: var(--red); box-shadow: 0 0 0 4px var(--cream); }
+
+  button {
+    font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
+    font-size: 1.3rem;
+    text-transform: uppercase;
+    color: var(--cream);
+    background: var(--red);
+    border: 4px solid var(--choco);
+    border-radius: 4px;
+    padding: 14px;
+    cursor: pointer;
+    box-shadow: 6px 6px 0 var(--choco);
+    transition: transform .08s, box-shadow .08s;
+  }
+  button:hover { background: #b8192a; }
+  button:active { transform: translate(6px, 6px); box-shadow: 0 0 0 var(--choco); }
+  button:focus-visible { outline: 4px solid var(--cream); outline-offset: 3px; }
+
+  /* ================================================================
+     CURSEURS TETRIS
+     Pack d'origine : https://centerpointgaming.com/assets/cursors/tetris-cursor-3805517618.webp
+     Chaque curseur : PNG 40x40, fond transparent, palette du site
+     (rouge / rouge fonce / chocolat) + liseré creme, hotspot au centre.
+
+     Pour changer de curseur, modifie simplement la valeur d'une
+     variable ci-dessous, ou applique une classe utilitaire :
+     <button class="cursor-hand">, .cursor-cycle, .cursor-timer, ...
+     ================================================================ */
+  :root {
+    --cursor-tetris: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXEtLS2+uqD///H79tT///8VAAH//////+f5+fP//+kbAABXAAj//3/Ti4vv7M7WwLEfBgguAQZFAQYhAQNPAAbp8dT/+d///+jw5c59WFF2Uk3//+f//uT//OH/+t8RAAAmAgVaAAn98NX//+b/+9727dH35MpfAAr/+dz/9dr//+vf17f/9dpFGx3/+d7u7s7u3szux7P//+v//+dZBA3/+d7/89kIAwRjERpQNjNsQj///+9nSET//OBTAAe5mYv///f/AAD/9Nv68tVVDhZlAw7btqQfAADy0bwQAACYdWs+FhkaAwX5583//+v/+d02AAX/9tn//+vrxLL//N///+f/+dz/+N1QAw2DGCbpxbH/9dn/99zr28T/+dz//+bj17//+t3/+95JAAf//+n//+D/9do/Hx7//+VoNDT//+7//eL38dX/+t7/+96Sf3Kif3X//+k0AABkDBWFDxtvChVnDheMEx6OYVt6DxlXDBR9DhiKYFlhDBWYEh9OChKMYFqhFCGPDxyTER6VEBx1CxeIEBsrDA+7HSxsDReyHCr/9duJXlibEh+gER+vGiidEyCkGCWRER1xCxZdDRZYChKBDxpzEBozCQ6PFB//79aXFSKDDhlCCRCrGCXeuqipGidqDhfCIzI4CxChFCBvBxN4DxkXAAIZCQvbwa1+EBt1Ex2hgXX45s4fAAKRJC99Ex65ITCMEBuzIjHr1b/k0bu7KDfFLTw6BAmkEiDSPExvSUXjy7f86tJSDha0GynLKTjxzbmADhnPO0ubFiI4GBomDg8pCAyVFCCLXViGXFXGOkjLOEiSb2XUSFa5P0vHUl6qRk2eGCXfTF2ROT9WPDiVHyu+LTzt0LzgxrFfRD/DMD9RMi9NKyvu1sBmPzvQrJzYQVLPMkLQrp1UFh1ADhPqSFmbMDvkUmVlQj43KSfVyLToZnNEERd0WVLFW2NzV1BnNjWEYlriwa6agnb31L/92cNAJCS9RVL0aXmlh3pzBhKMa2RvFB6rmYo3LkhGAAAAyHRSTlMAAQlyBAL7AdUDfPz9AgITDP39/v39F/7hFv7+aqTfm/7+/TNuQSow/Vd2aBDm9+AdB/7V4/716P3+/P7K/bD9/ecB9T39/f729fj+9Pz2XLn6fHf+YK/Jzv79/Tf1/djU/teN/eqH8P3V/LS6/H6V/vzI+v/////////////////////////////////////////////////////////////////////+//////////////////////7//////////////////kuAp7gAAAAJcEhZcwAAA+gAAAPoAbV7UmsAAAMYSURBVDjLY2CAAnYgYCAC8PICCVZilLKIiUnyETaPQS08Nj3Wjp+BhZ2AwrC9WZ+s16UxcBKy3fi0cDv3b8ecZEMG/EozK5UqFK8VFM7OZzDEq5KjkWfWjBltvueKgJ4noLC+5uRlob+OsnkC+GznqBStqlv2Z/21/w6z5RlY8Jkoumba1UtX/00pljZhwmM7R6N9fdnFX1cOLDa1TdWM4cNn9fSpP6+cnbhU2CoxTlwLp+0clSnlDRfOnzk6y/LdU6FzEgIMnLgU2s8q+/D2/ML5kyZ0Rt41C1bG4XWgZyrKL748squ/ta9f+F7IVvEg7GZyVArXzbvw6OzJ5TWz6kuWNARKiasxsDhhUXjK8tKLM7vvlHYtmjRh0sLu8o59KmLYjOQ4HfX88ZHdO6pKpk7s71u6a9oxT78eeUZMd3L0rjnYvX3xppKd89pLSydPLu/Q89nTowoNJUZkhWU7tmy/seX6hg0bp1TNaSmdc7TMd5s/Zvrk6J1ycMKmxd3dnZ2b27raS2uaW0qObzPR10IPJY7eZZ1NEw7Mb2paWjWtuqatpK2teuVtaW+g7ahe4qh1WzhxUlPfnPr6LtfqeSemlq6esabM1GsvM1pkctRqzG9tmTi54mTz9MnNSyy6+lqrmpdu5L6FRWFTaXNre+nmuTWHy2aurK6bWl1Xt59tFYbCRqVZNSUNDdUNDeWL6mYKiqxYwQYEHlsxTVS63N6xsuN4h2DVrAohq+gnDxcsWOB+01kdLRFz1PLUr17/+fu3L8fa5i5XfO2wToILBDASEVBhy2rurzYyuT9Kyqfsr14hpa8DVoMe4AmNPBVruNfaGczOUFgyfXqF0CtzMQYWTk5ejJKiV0FExGJttoDcKtuZh8sWiVib82NJuqwMsvel33+UWifPoG7zZufyknKRPbrYFLIzGATIxSfJyQqwMjCvUnw2c4nCA10x7JmBjwkI+ICBJrNPj01QkG2tBPYCgx0cWqzA4pk/Yp/RIaNDPZq4SgFoIc7OoBMqo62t4sJAqKSElflg8xgZ8ankBAGovYwMpAIAAIgYrV2ZzPcAAAAASUVORK5CYII=")  20 20;
+    --cursor-cross: url("data:image/png;base64,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")  20 20;
+    --cursor-cycle: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXEOAAAVAADUuqj//+XhnZT16sf/9ur//db8/N7//uL//+emfnTQNkX/+t798tccHBz//eH//+n//+0bAgT97tFJAAjx28j/+t/9/uT//+f+99v/9Nn/8dj36M9eOjefeG45CxBMAgu1j4IxDA8eAQP//+UzAQUmAAD//+P//+r//OL//+j+99v//uRRAwvw69CegXX//+xcQT0EAAD//+7//+n///ZBAAX+5Mz/+N3469H+7NOiHClwUEqbNkBCISH//+z//+L//+3//ODcxK///d9PJib//+r/9tz///D/9NpcAw///+BTLy5kAAv//OD/+dz97NJUIyWQICmIOD6pdW3//+b///Tevqz//+iab2f///hmFyD/+t///+z/+t8iBAWaS1Cdjn99Xld5KDDKPkr+38lZLy0zCg6nNkB1R0VmGyFiJyt7KDDv4MHdzLJNHx+umYrBnI1YDBT///hCBAr///JzKS+GDhv/9Nnk2MLltqXtz7q4LToZAABFGRuKDxsRAQIoBQkdBQf/6tAzFRZ2DBb/89qNbWNbCxMjDA0/ChBQChJ8DhnryLQYBQdyDhgtDA9sDBZEEBV6DBd1DxmPEByCDhk3DxPjSlntXGzdt6bjy7ZlSUSkgnciBgn/+t9lCxVLCxJ9Ex3Ys6KLGSXTuqetFSRfDRavh3u7l4mTaWKPZl9WChFGIiI+ERV3WFBOJyhLEBZIFxqYFSGFYlpECxGgFSKCERy2GCe8HixrExz23caEFyL55c8pCw61IjAoEBGdDhuGDhr/7tWfGCXGLj3HppdjDxc5HR7UNUXIVmE6AgisJjPZR1nGNUTfUWT38tjy48vq0b2UDhowGRmTGSXt1b6UbmZwV0+yoJD+dIKkDhxGKSjUUFfSQVNfGCCHZFzwcHviQ1SySlPluqqZiHpREhhTKiq9rJpFNTC+Kjp2GSPlxbEuAwh0Y1ry0byTNDveW2loLDDZQFHbuqhjXFV4HidvMjTcaXPra3ajQk1+LDSTJzErHh2kBwZEAAAAtXRSTlMA/PwMyQQGAQMCOLn+/plDAqWyif0q/hL2Mfx/Y/0h/v7+/f7++839/V1phX5x7/0m/tH9/LrB0/39/jL8/f7+/GzkjrD+Nfjh8ab5/Dv+/ePgPPr6+f5Rnf6s/O/0x53A9/78/vj+/fv9/v77+/0hHvr+/ffb9/Lr8e3+/f3++Pv///////////7////////////////////////////////////////////////////////+m426cAAAAAlwSFlzAAAD6AAAA+gBtXtSawAABBdJREFUOMuFlWVUG1kYhm9CMkLjhcAGggcpVpzi3Xqpu7vbutuJlAARAoFAyEJxd4cCxV1K3b3ry7pbJ9IkLJzynPtj5p537qf3GwCmA2sBswAjugdkFik8w9MUUERtDwUWFGeCGmeKxYxSnU8ooITtLC+7WVa+8wIdQMQZDJrT52h4p/rtze/uPnx4/y1f/edGdlET5yt25zDstt8qSD/yMZkc/Nsuxo4N/7OORbq09zXmKu/4VcFJVQUt3X13u0eHSKR8SyrmjLFdC6uAS3XcJm59U2sW/9t26fWx8N9P/nHqk8JtADLWEfddeKNEKZTKhQqJqA6Hl7X2d47dv38CX7oXIIYjEbCVvSzYu0KqiO8QyHCOX73uV9xytb7obqrZ7SB3qsFNCGz9wf56X08zVyKrWdMQy3jrILMgsTlPMchryN8eYg0QfWZWtiX3SHOEiWLRZ9ErrMCiQhwGTxYzpLTn+Cw30Z6JAqrljVInSaM4V5zESfAgIoAaUkgqKdmSdODxn389jAp7SRs5DAIHXHJrqwQCmRl+WawbgGBApc9hBGZXRqom0ivuHdUKYUAjNEjI/e0Cx4zJJezFELYDq+3MD6uMTD8yLIkKoRPVO9gixDmcL5ILMla6LXTT+oMgCDCPjnJx+PfJoOhkr4c6HI2QWdSdyJmch72jsL4G636N+O8f1chTzu1teqHDN515ZgkLAWRoVhiE7mMdOqOaILseZKid1JluSTRLmPc8YToljfDojGq83/UmAWgdJ8R5ny9ScDAhZCxEac5xp/rHwl3LCDSdsNy1ONfebNKDhhq1CgKsWOV4Pp/vXxqgiRAFO5Y4XUvKsm2LXh9qaAEsP16PjiuVgmOOsdoiosB8/dktYnGN7cbCQBPo+QUCnl7se81NfS5rWJ66noTBq15+xZHvSXkRrPf32KgdxRo5NMTuy640bhq/UlcZtdBkXebaq1yFaMjPL2MxlkoE2NCDPnCR56Vye/g1C4yEL2eu5abkbN6Ugvt+F8OaBoh7rthVj9anJha38iunCplf1DamcBX4r31K2QF7Gaxjuw/8mMrNlfH8My3nG4TLq/1xvKw8ac7GN5m4uIESR1LMyJ2L3NRGURkJu96ovgYUNsnnc2VKmnxTeEGHqO706Yc/j4x3pjWLr132NRoY2OWyCvS9VCcU5ghT5B28p3cep6t+Gm/vSBJ03aBOrSsKTC9XSZLta5OTs3h/Tzy4OP5geFDmxD+UbQqMxwoMgaXZtji8GpHoxBMy+Rfy8GDXhwui3afPKUps/qcY+R9FjMZXxGPru/1tc1+ZNtBgAHkumovhHjRwPEaDE8nSfIZpCqO6XtiwovesFkvrKYEY+koDBGxWm2pYbQNeOJxR2KglXzzEiTpm/S/MyDMK+2K2LWfzPwAAAABJRU5ErkJggg==")  20 20;
+    --cursor-beam: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXH//uM3DhL//+z//6r//+rshQD//////////78UAAD//+3///82DhL//+URAAD//9f//+rvu7sPAAD///IPAAD///H//+z//+///38SAAASAAD/+t45DxM/DRQ5AAk7AQlSAAgVAAD//+n/99wTAADR0aL/9tn//+7/8NLo3cb///D//+3//+kUAAA5CQ8BAAD/+9+YamIIAAD//+z/9NkeAAMjAwZNAAf/9NnOtaILAAATAAAWAAD//+706tH/99v/+N02DRGvjoIcAAD//+ptbUg7CA//9t3//+T//+z//+n/++Cng3ixj4KCV1L/9Nr///D68NdrFB///+X/+d1fDRbJuaYbAAD//+X//+z//+NULS2iuYv/9t7//+b//OF0GSUmAAChe3JXAAyDXVZhMjIpAADEoJGbb2fct6V1Exzm1L3j1L2yGympEyGmEiCIEh7TtqNwERvWtqTk1L2sGCW6IjBoEBri1L2cEh6eHCm5IC+uGCf/+N6kHCmtFiTPwKywFyXJMD/BoJDat6VxEhyeFyWyGCZ6Fh/AITBtERqgFCCkFCGiHy2iHCmeGSZ/FSC8JTSvFyaab2erFSN4Fh+WFyOxFyWpFySrHy2KFB++JjTDIDCtGCaGEx7/++ExCg7g0rupIC4bAAKdcGiaEh+UER2aFSKAEhyMFB+hjH6vFyTKNkWXhneLaGDNMUDJrZzFM0ClhnqSEx+qjH6uIS7duKbAIzJ2FR6AGCOqFiS3IjHJKjqaGyjZt6XELTzRtqOXER2gEh+7KDepFiWzlojIt6OxGymccGdkDRaYGCQWBAbPrJ3/9dvQsqISAAOdh3pUKCiQEB2mFyStkoTHoZKjjH68nI64JTLnzrphOzhxHCWdiXuHaF7a1b4sBwvQMkFyHCXXz7mhIy8iAwehFyRnOzmsJjReMzKHFiHNv6rLo5WREBxnR0J6GiQ7ChC1k4SmiHukHyrcOUh/XVVsGCJtOzq8nY6OEx+ihHfXO0rOOUjFIjHJN0XgybUS2TxfAAAAaXRSTlMAyv2KA1UBAwEE/LAC/cn8BIsD9LD8rJ+wAvj2cf789/v8+Ixi/AVXakUWZVWK+vv68/75ovH+/vxl/vD5+38ykXv9/vyTB/z3ibH4xvz++ozmM/5kgfz+987b9f0L95DG/Pj8/P3+9v5aFMLaAAAACXBIWXMAAAPoAAAD6AG1e1JrAAACeUlEQVQ4y2NgIAfwcEIAOwhwcvLgUifJhspnk8SujoMhKN5EHAhM7LQ1NLR1Pe2BQtjsZdCM+5/R0vLmWsvx169fN4bf8tBkwGY7O4PYxnR3eXkFBXl9dzk5Of2IjWJAQUzAwiDxy+L3vz/bNq1tngXEL7jWSQAFsSnk3qr4t6FpWd7kyctr16xZxb+aG4dCic2K27b8LDxadejysy0rXnGtw64Q6MYfeuZmSz4sru6buPCpmbnBdREcJqovSE37HrOwpuZv9plLz1/6n5PB6hkgCDA0jX4sWzuvo3jJWW9TQwchBjbsIc6mFRuyiPdE2eRi2yxXNy02DhxRyMbDzsBaydS7rKpCaj8zA6cQG85UIcCgk8vU3zdrmlQrM5CDG4BM5K0p7+oEKeQkpDBvZlmbcJEgIYWlTGW9+RXWVsqEFOYyTZjeni1dQthE3j2TdkxUIuzGUqa82g6giQQV5jDt7ikoJsYzsv37JrQRY7XTkQN7d9lkMRP29eSGGdl62/Er5ARF4dGe3m7hg8p4opCNnRPk6wnV9TtBnhHgxJUoOEBWL+Itn9TVKV2iCzQeezJjY1ALjUyIui+bVza12+V8oA+foxrWhMvOIFOX/HX9uwdXqg6funD73nrfOhkc+VrkY1Jixbf3i6v75995FBxmfBVX5uL+lPKleUP9zTnlK+ZsePhE9C437gJgbkHB2xlT85fPy88v5F/thbMAsPi8snD+6dmFK6fPnj2N6yLOAuCGMZeoKJeqqCoXFz8/v8Ex3AWAn9HSk5lTMjMzp5xcauRcZ4lVITB4VfgY+RihAMhUwRHimMKSOBMPilIOdtyphwMFoEgBAK1yy3tbM5QtAAAAAElFTkSuQmCC")  20 20;
+    --cursor-arrows: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXH/qqrtz7eANiP/43///7/iwrD///X//////7ojAQT99dr++t8mDA3/99s4CA1dOzj//+Z1VU//9doIAAD/7dv038X//+TbpZP//+10SUb/+d7/+9///+P//+Lm07wTAAFEAAT//+z//+VULy1vCBP57tSNFyVrS0b15s342MM6DxP//+P/99z//+b97tX//+337dT///H//+qofnP57dL//+P78tf77tXRsqHv1LhiPDn//+ZpSUOJbmOYcWdiQTxIJyVFIiH/+d5dMTD//+b//+v879RlQD1IFxosDRD+99v+8td+Uk379N9nRUBMMC3469JYODUsCw40FRX/7tP/+9//+N7w3seujH//+9//+910TUewhnl7TUnXnHXr173iqo2edm3/99wsAAD//eDy4MW2mov//OD//+pyUUs6Gxv//+j25ca5N0L//eO2Kzj+9dr//+OoND1jFx1dJir67NR2HCRxXFX48NY2EBP87dDz2sP/+t0wHxxzXFX96tD/+uEiBgjr68396M/02sL//ODn1L49Cg7/++FzDRhrDBaODxz//+1LJyZTDhWADRl6DRd9DhqJEBv/9duAERyhFCE3AwhOChGMDxsNAACFDxr//eKCDRn55c+NFCAfAQJ4DRj/89mXEh96DxqDFB9iDRZ2DReTEB0hCQv/79YQAABYDBNgDRUxCA2QEh5EDhMpAwg/Bg0vAghdDhYnCQxJChA9EBRtERpwFh41Cw+FGiQbCguQGCUhDQ4ZCAkxGhpIJSQ5Fhd6WlPq1r///uVlDBaXcmrfx7aeGSX26NGcEyD/+N6mGSb138l+GSP95M22HCpLEBaSIy3pV2fewa/SQlSaNT/ycX1bERiMTE/87NPPM0TRN0lBDBIsAAErCg5BIiPy3cVAICB5Zl28no/Zv6ynkoWQaWC0joX/9OL58NfjUGL/f4ubQEiGNzqkTlPjP1LQP1CISk3/+ed5FyDURFSNP0bOKzwXAACLZF2nhnqYd2/j179DISF5YFgo083RAAAAsXRSTlMAAw8DAgQKAQID/rD6/r/+/tv+9fwEJ6UExfuQqdc+/v397kn9/iv9/vn+/PvdvEyNrPPI+1+Wd5b9F/mq9/X68/n5oPtfRy/+/fzYmf1D/P79+/T+9vLv+v7ng/n9/A0nCfxn+oZU+9TQ8/aiO/qy+ziy/v38ffz6+vtY+eD8/fH98Bry+tD4/dz///////////////////////////////////////////////////6aj3qnAAAACXBIWXMAAAPoAAAD6AG1e1JrAAADZUlEQVQ4y2NgGESAnZWVlZMohSCCg7AydrZkAwN9BoJmijI4L7J8NkWfgRW/OlYG06NSiinPjdLwqmTnYDA1Or7g5JaVL5Vy8dnOyWA+J5136eLF2/ZZ8vjh8hEHJyNDWa89187FM2dO7V9wVaeaQRQohGErC9AANZ5fW2+enrxi9szJD6oiBeOBQcXCjqqOhYPBXZnJ75H21PkTF07omjhhvmJAeLOaW6EE0ASU0GOwWHQhXKbm0P3N/EsmLVmzbrOCShT3Iq0zPgwcSGZyMDDJfNHQ/qPD81sgiHduT8+mfR4CT3UW+WpL9cowMcBVcnAwF52z3aBap+mjK6z5eOKkqZv6Vgl7Sx/pKN8vNE8cKA+LXAnuOdbbi6cGawrqhlUeuL9x88+DU8J0BSM2TNi5IGuOIchlYHVM+a9cvC5f7Frpf1josH/prc+3vntqCAkdFtg1eUU/l0cvN8R2TgazeQ67Cs6e3Ht5r7p61+oPb2/cuDKDX33SkqW7986eP5U3Zp4ZKJaAaiXt1uSdXXx68jQgmM/17sq1a3dn9E9bv35F94TZEybM5zpuDFIGVjh96bSemRNWTJ7cM5Xr+ptP3+5um9GzcOHytRMnTZqwReEFWCHQ1Bz57HWzl87vujd9+vTNq69/vHPnxwyu6Rs3buSftLC7f4/TCRtwtLMwiAme89y/9GL3/n99B/v6Li1bs2btrj4gePxgds8GEcdFsmIMLBBvW3lfEFiwozu4VbglNOJAyfndm+rmhTYIH9nQtX21wzw+NliQczJYZV515J/RFMEXpcTzb27P+k0PG5VknY/wz9ijckIyHpEyORnEZE85KWhMWRT5pMKra9mydfvqnzzlCQzaE/A6I4GBETmy2fhWyQe2tR/qVn2/e+rynV9VFUO0agPlbwPtRUm/QJWurmrKfw+t3bFw4czlXUtu3gvRUnZ3k2NCT+fAZMfJILdIZfWl7mPH+pct2zfLZYocUAg94QJVirKyMHLP8Z21a0nXkv59s0zmcDOysHKyYy8jmMVX2fNu696ydWvSmVRmBnbcpUmidK/16h3bZ8X1mqMkbXTAwsJgeNRWRCSm14KBlR1fScHCwSx+yiR2lQwzIzuhsoxNWk8vmo2BnWBxBg43DnYiykdOdnZO9sFUtAMAIDgvncFlY1IAAAAASUVORK5CYII=")  20 20;
+    --cursor-hand: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXHUmXn//+owERP//////////uH///8OAAD//6ft7dIUAAD/9tz//+0wBgtRAAD//eAmAAH87tKqvqMLAAD/8sr//+3//+kgAAD///L//+j//uNOAw1lQj43ERNYHCFCGBuUFCD++eL//+l6Ehv/89gGAAD98df/+Nrr38L//+v86dH//+eskIL//+jWwq3//+n579b/9dmHFyL//+v//+7/+Nw2CxCAVVBBIiL//+b/9tz///D+79VBAQkxAAR5VE45AgjNQ0///uRJHB//9Nr//+ZoJCv//+f//eH/99vt3MUHAAD/99tsQD13UEuDZ15rV0/18dGMEx9ZFBr638j/9dnatqP//+v09NT//+ZKJyf/+97//+yIHilTChP/+t9qPTr/+t6XKDP/+NyuTVatSlP/8NZPFBr/+OVOMS6LDhorCQ1qDBZXDBRODRTy3cZ8DhlnDRaBDhmSER6EDxt0EBmIEBwVAQOcFSJ0DBeODhpvDReGER12DRhjDxgdBAdZDBWrGCYxFheiFCGKFSBjDRZ+aWCBEBxqDxmxGSiVDxyhFCGbER5fCxT/+eCeEh+bb2ceCAuYcWiXER5CDBHCLDqlJzSVGSZIDRPROkvLtqNoRUGNEh5yDRiRFyNRCxO4GytzXVWtHCm6nY48Cg+lGie1GynjxbIkBwvMLj2bIzAnBgm9MkAjAweiOUTUQE/DrpyBbGJuEBquIC6bGibAHi3//eHFJTSyIzK9JDKtEyLCmo1kFBy5KThsIylIBQySJC+ffnJ/FiH23snUsJ+6HCq9GilVERc4IB/OKDi4lorr1r8kERGdMj7v28SnHy3cxLCddm2oPkrEQ0/xYHOpSFCxj4LmUWXST17KNEPqXm38d4TFsZ/YvarZuaZ3YlqSaWHexLHhyLOJGyVVNzW2MkDHKDi/OEZ7HSVULy3RTlaCKzOwh3uqgnjAn5GDXFbDMUKKGiWjhnrpVGelUVXxfobKPE3RV2Hsb3uBZl22LjuOd2w3Hh7aTFzeaHEKQTC+AAAA03RSTlMAAkL+AwLLAf0DFPz9fP4Byv5ICfkEacP6e57W/v79/f38kOX9efxATB/f/v7+yRmtLlr+x7OG/vz+zu+3/v7+/f79+v7nvP2B0WUs+a79/fz+OPn2/W0Ohhjc/pdt+Pzm/pz+u/7+5/v9/P///////////////////////////////////////v/////////////////////////////////+//////////////////////////////////7////+//7////////////////////+X5OhlwAAAAlwSFlzAAAD6AAAA+gBtXtSawAAA1FJREFUOMtjYCAPcLIAASthdYwQip2wQqFYMTExQ0Iq2RnMtq+4ePEMjxADJz51rAyGzhZ8CgoSS0z4GfjxeYSBqSDn67cfgrIJXHgtBymUS736XXCOK2GFzes3rAUrFGXHr5D52s+bgnPSgSays+NXmHbVSXCOs5tbEhcDCysnXqv38f399efQkRRGoDsZsahiZxcFKUy+9ZvPxd1dIivTVMogjIGVFUvcAU0837z61LJ11+7cPnH20vXre/pVGThZ0eLESBwIrM40z1hesubyjVkzJ8nLZ4hM1grSRAkoTgaj/tOTL008er7Z+MKMnHMbbs3M+X/nSkWibSiPFwMrcuTZ6ErEyziuOd28etWFdetv/8vPuXljegNztMLk7UgRz84gLL1IZtfiww2fT844PmXd5S+zpuZcmTU952X5ApF7kgwsyAo/HOjN7qtwaK6dUL7y3KxpU3PWrvq0prKnnmMjmkIH+/q9+13MGw6ufTb9xcdpM3N2HuvIya5u5JjNi1AIBCZLuDnevHaKa1h9asfCac93LF25Zfe8SdnZeagKWRk0eFZYHj6+u27S1m0Lm3ZtW7g3JLhcRd64Ft1EVgYh56d1XT01HPO7WnoWd/W0KnZ01H6aW54vchdFITtDpPUr+wX1B/dPX7yscsu+naVVRTW5uVVFU1E8A1IYHvVe7uzMVdOWtbSUdC1vKs3Na2wsauubKrJECsUzrAzq1jwT7Y5NmDJhSnlTU0td3oL8/L78pcw+uqaoOY2dQV/vnd3yKSXZpcWVvSVzK0s6Kis7JlUwF3igmAiKb5u33Acclz4pKZxfUlrYXTyvurqswu8IG3r+4WQws5W1PLmyozS3sDC3JruwprCuk2Oylj6WfBbDo32Ury43ryo3r6i6qnNubRnHRAF+LHlHVDPiMV9uXn5bXn59TVtZdjZQIRs/ponAvCC2QiKnfuv8+a2tM8pre+eZqz3Uw1ZksTBo9PtPKurNri4u7i6u6+7jlntkwIC9EFTSkZVR6dxcv7msqLPsRMUeZW9sORGU3pQt1Lg5ODi4wUjkvhJaICIiSEo7oH1TOxA9WLQo8FC/Og6b2Rm4fK0E2EBAAAg8VXEXVux4ucgyrKjRha+ARgJIwgBZaTDoCxhxBAAAAABJRU5ErkJggg==")  20 20;
+    --cursor-blocked: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXEJAAD//uD//+7998/e6s7//+T/+v/72cT88sT/9dosAAA9AAf/vS3//uT/+t747NL779UwAAL86tEtFBX+9touDA4BAAAmCAr/89n//uj+9to6AAcmAgMUAABRJyfw4MLAnI//9dr//+yLZl//99tXFhz//+SdGyb97tJsUzb//+X///ZZERj//OE+FRY5FRbBhHLeybPgvaJ5Skf//+T//+ljODbMn4X//+Owgnc/GBk6Fhg4Fxj///ExExM9JCMcAAL/++FIGh1kQTzKq5u6kISlfHL/9dn//+///eb///D/99z//eL///n68Nby48jSp5g2ERP/+t3n0rv/6dH//+z/9dr/+d2nd241ExT/+d10R0RfRD+eZ2H/8tcjCg3r4cSIU0+jJC83FBVSNzP//+r56sxCAgrauaewm4qTFyP//+K3iH3///AOAACunYz//+eabmZMAAj//eFsXFP99dzzzLnex7Xm07y4koeVaWL//+n57dRyXlX989eBDRmGDRmDDRmIDhmADhl7DRd3DRgmCQyJDhokCAsfBAeGDhqPbGN9DRkMAQIcBgn/6tERAAIbAQOGERxcDRUrCQ1gDxdsDRcXBgg7CxCREB15DhhyDRdkDBZYDBSZEh+LDxtvDReIDxtpDhhTDhUWAAF1DRj/+eF0DxlpRkKODxsgCAtmDhdrRkNQDhWmGCY2CQ4TBQfavKtMDxVBDhPewrGSFCCiFCIiBQlMCxKVER21oZCgGiaMFSCyoI+rGiicFiNuEhskAALkyrj/79iFCheYGSS6OEBRDBNHCxJsVE3969WIX1koAgYxBgv//+///OFfNTRbMC82Gxv//+by3caviX9DERYtBwuAChWbenBLODNWCRGjfXSEVlKsIC2UFCD/9NxHBQmPHCZSPTlPAApAJCNzXVW8l4qxlIcsDQ7v1cC9oJL35M6oh36cdWyhMThMKSnLrZ1lQj97T0t0GCGoKjNoKi1bKivGppfRtaQyCg+CWlXOs6P55taMamL3+9b8AAAA63RSTlMA/DmeBBTKAQID5/z9AdH4KVz9/v5o+/r956Vw/vr6/SL+fdr9l/7l/UYD2en+M/X+CQ8Y/Pi//g28/fzy7+7t9vnk/P7+/v1NzvL3uO3jOzr7+t028ppeh/zu8f32/u77Gvn97Ph7Mv36/vfF/aL6/oz7/u/+s/76/f396Fn6Nf/////////////////////////////////////////////////////////////////////////+/////////////////////v////////////////////7//////////////v////7////+eUUbiQAAAAlwSFlzAAAD6AAAA+gBtXtSawAABDpJREFUOMudlWVwG1cUhV9axbIiM9fM7MQQQ5I2adBhhjIzM7ezWsHK2q7k1QotliywpMrMdo0xxmwnDTSMTlJMMW2nchLXUuJ6Oj3/3rxv7rl7d+55APwvUUgOovw75zrn0aEc8A6++x8Fe4PZi7pSgLdx7UuNjY1f2tX4xlqjN6DMUpRM3ua/9eDKAB8fHyo1jEqlvv516ptJgHw7RwIhxo4XR6q6W5qaTpQmnmhplqzeUW0MsV849wee3PLtyrCCejPMxNgQRKdZEaQ9/EhCpvMnuQIvF88V8U93NWvpMKqGIDVdfqbrzMDR7FeSHEkKiFxV8dQTAhUKMeViE0sjl8nFWjXGGTvw28bnHdxJ4LnLYZPn29iwQojUIUiBXddRmHVI2h5eEQymh0QGmXHLf2j/rrsGYh/jWfwQJChIiFhglNHV8hM3f9Nmr1vuriC4MHaUc3g/plFUlXPemvhw4qpv1ECb1QrT67nfX+vImS44P+GaPuKXZlQhJUzxlfyPNvkv3DsRhkvKtKhudT3+rOfNknbwnh97u38uYiultezEZklAhUte5JYruWODZphoqhGu8L3rRptTYIlbw2GWUiqlY/sxQdlkR0zWtl3Zn7VblTKaifOME3gSlVskvF5Iy2gQcXdWe2SCnEvzysvYsIlzv+/CaesFJaGEQcdLT8cFmBxmEaF+f+Xk7RvPHysjsDZn0K3VbMJz3z/PFxCotra4PPeyR4b/0B/UxCJi4KEZ6wVfuKnYYnx0+IMAnogJMRlt+kWde5M9DlBrUFndvYUOYGgDTYyP7PmkOkAiQCGGyhq+uP+9FDsIGzjOIMEU60f2bN9QPcnTsWRma5k+4urQcR/CIK67z8G65IXSIpl+dDgkK6YiiGfTwkRrmj5q/LhPjZbhbO2moovLLR+Pf5o3RWpoTEjDQ371GzTTZJxlTmADZBDZ8Itb90XG/MkXKlkw09TDj29T01icRYWOAyfEchWGL97RuXn3xiieRYeyGootqiKD3Mpx6HHVGlwo1NDEAdf5EafW785ep/9KJGAoiiGGEkHwo49H3hp4ssvvO5ECBpt4uUnEr051eWcoCkEERTUqlF0vmZy8lJJxcxntC7Or89U6nUAB03rKz757oa/vgh9XiDJkOlEV/ljhw+un14YMMl7rCMclSjWkSzv29ulz506niZQMSCaU4IEXN2TNLDcJbPe8sgYRmTFZbWnryZbSrtJaNUpj1fk9emTY33G1KSAppT9dWilVopiMSWMaIKamp/cQ/6ynRzSF7BwUXp6PBHK5UrX9T6sZGJ2u4Em4gX0J8wHl9kiJM65bGjEoslUW22yCYlsVb9mDS/vjAOmO9EkOWZL6zbwZBcYuX/IACbjfGWdTsXcw9vNp5Z+KnjX2gDuFAvw9XGYU7Qoo5P8UzeQ5wt6hI3eS+xzPAtlBzjd/A5TBzwFz7/u4AAAAAElFTkSuQmCC")  20 20;
+    --cursor-question: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXEQAgL///JVMDD//L3/////5H////D//+///+z3qqosAQQXAAAmAAHkzbY8Agj///D/+N3m1rn///D//ubu6c4xAAMyFRUIAAD//ecpAAP15sz//+n//+yOd2uYFSJBBQwdAAD37ND/+t796tHWUV5xRkJMIiNUMS9HAgv//+736M7//+X//+z//uK3l4f/+d7+6tE5AAVbOzj//+mTc2r/99z//uj97tM3ExT//+S2kIL//+r/+95jODfEn5AGAAA4Ghv//+/98NTOrZz//+pmKS9kKi/54cr//+P//+n//+b+9tscAAD77dX39+FYKytzOzv//+lnOzlqRUGgdGrwd4Kjg3b/9tr/9dv669P//+n/+d///+2BYlqxdW28iH3//+r/89iWeW6Xd23//eJgKS20fXT/89f/+N3s7NEtAABSIyRkGyH679WHLTTIb3PjxbL///P05cz//+X///NgQj7KsqD//+X//uS4p5Z3DhiHDxsWAQKCDhlwCxVzDBabEyA3Cw8cAQO7p5YxCA16Dhh+EBulGSaSDxxGCxLMLz8NAAHsyLW0HStMEhiLER3ZSFmyIzFpDRbTsaAhCAuuHy0nCAvNNUX//uPAQU6tGiiXEB1dDBTGLj5sDBY9DBEhEBBWChKfFyT/+OHTtqNLCBD/+d5WGB65LTzYRFaMJC5QCREkAQO9p5bpWmu5IC/z2sQrCw7m072ch3qFGCN0ERu0KjgcCwzt0r3/79jiUGNBEBZSODXeWGfdSlyDEx/oZnFlDRXvzbnRO0ziWWj24cpiDhf/89o0EBRLLiv+7NOTFiKoEyHwcn3EopS2pJOpfnP/9tuignbdQFDgwq+ZKDN6FyHYu6nwZHTYQVNsExvEqpnCNkTJYmrWNkb358/IJjXezrehEyCKY1w/IyLv3cXgzruwnIy8gHj4eITt3ce8IzPdVWXNRVLmc3yCISyYfnPbaXGGVlGKFyJ2JS27moyiQEjOXmh/Lzfz076LaGDGtqXiTV/Zv6yeICwlBm/WAAAA33RSTlMA/QQBBAICAQOQA/36/BH8iPQKQsUX/P79afwsyJz6/v39O7j1/vv9/v2gHYh2dgrV/f7+gf3y7Ez4sP7+3v7++vyNPv6l/P0V43CVsfZCIvz80/n++v71W4I1sIu+8/r280Lz+dT386GnHPX6+/n++PveMlnM+vnn2P/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+XsdAPgAAAAlwSFlzAAAD6AAAA+gBtXtSawAAA9xJREFUOMtjYMAF2NnZgZiBEOBiASoDYi4u/OqAJjEzgzF+Q1kZLFxFZESA2CqKgQNZhg0IEDwWBqUTS+Xi5LbIyd0QlEZSyc4KVswOt5dZdnN2mrubu9sKnuda+gwI25mz/P21mdlh6oSUl1srhJ07eO7VrNotuwy0GdhgEpmCKiqCPnwQrSwMeqdzTq6YOHHVqonbm05abjSBWs7B4LVLTUND7XQkAxOIz8Qg4CL26f27adsnTdp3cFbtC064Qs51PO3zGS8WKYGNZGEQWKp5dP9K/ubaFft2r1TcEs3AClNYxd3YXhtYuMQCZCZY4e5V87jtQvYA1fMky0B9A1TYIlU3ualV8VuQPtDdQKun8K+c1sEdqLFn363tPCkiSAq5z9TUyK9VW27rx8DBwmCy07e2uXnqpq/fJ3ZPUjRFNpG7pmHyoeniAec9+YAmSptPMf34Waxp/fq7c7scLsdCgwescEJ9fsG9a0aWS3S42FkY/KyCLtn1/1SdMW361OATeghft0hNaLh2c/00/oXWhsr6INsle3l/3DxyqKkn1CaDBdkz1YtW7z+yeFHTWvVd3swcQgySh7lnrZqxbEfwMW94XIMVfqlffVR10qQ312vjL/kwg0zknnXl/jKNmcoe0FCEKOQ9UL96/du+s7MbpisGLJHlY5D8JXV96wHuU4KicHUQhdVrPuyeOK1zgnxHe3PoMQOh4pm/JXp6mq1thRBpBxSFvLkrVh+ZJ19X13i27iSv5ekS5xN2J9XVeS+jKaziV1WdMaP7QEP1hDk1iw/U/im1urr2XtjBNSCrkRVeULjSPa/7YXXXsvaahrbjtWV3bG60zro1Q3OvGarCKoXuDX19fWe2bmurq69uW9PKWN7bevd+N6ZC/nkbOmbPXvy4fX793Oq6zm094b2Kx2/fljqFoXDD7MY5nTU19XPXLOjq79rTEz4zhJGHh8fUnA9NYV8HUGFdTfXW9lbGHkZGnjvmeYd7ew8vl0QEI1ihUcecCW1t2xom18+fLv4yIX3KcgtnXS9dXSWkHAhWKNbRuGgqMAkeapi89unGmYlWSVAVrAxoChs7u3YYG0+dXD2/adMmNUNpBhYOJiBAKXmgChXEj6lYdi04Lr942cJnwqgFCSLAeVf0t4rvnGkswTi3rm3Bws04FDpd9XVgdFBXSX190XFRdX0TDoWsDM6CO6csnWIowhdjY2zUv2fTjkdYFQL9J60jIOCk58HA5/nEgZHRwfEBdoWwsALmqsglLvbn7Tca8DFgLz9ZWUAAJBehJSurpaPNQKjwZoUV9AQLeQ6w2WwM5AMATN1bVKBzemgAAAAASUVORK5CYII=")  20 20;
+    --cursor-timer: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAADAFBMVEVMaXH/+d7//+T//+zq4sn/+cwKAAD////79tv68PBeODb/5HP//+/jxq8wFBXu3MIeAQMOAAA5AAYLAgH879MDAAD/99z/9dn/993/99v//+j//ul+VlD//+RaODb//+f//+n///SWf3P05Mn//+fjyrL//+n//uP//OIRAACDICj/+d7/89laMjGyk4Z3RkMgAAD//+tFHB5AAQn/89n/+Nzp79T//+3/+99MJyf35cn//uL99dhfPjv///Xlzbflc31wUUtcNDP56dApDQ3++N788dZQLy00FBX//+X999//990pAASfdmxlGCKtS1P//+H/7tQfAAH//+T/8NP//+WJdWr//+6+mY2rj4L//uCIZ14MAAC/f3+hjH7///H/8NL24sn04cj//+v//+///eD//OH//+j05cz78NNrHST88tX//+tgRkH/9dumeW9pSET//+iAWlNHJSM9AwoyAwd2DReFDxpCAQlvDhhoDRacER5WDBRRDBMwCQ2abmaSEB3KqJiCDxpgEBj/+eB/DhlhODZbEBcoCw48ChC8IjGVDxyYEyBkERlACxBECQ8QAQH//uU1CA2iFiPJLT2ODxuIDhrAKzp6DRdFAgqVFSIVBwggCw0IAAAbAwUoAAKLDxtJCxK3mouSa2Lauac2AQjXRlbKNkZLEBZ3Ehzsz7o9AwlxCBOcGyfDLT2uGyn/9NyZIS1MBA0zISCAY1vKPUviUWTXQFBhCxR8Hij65M7///DQMECPFB/bS1zw0r3oXW3Jn5CGKzSwND5bCRKzO0WXGSW2IC+xno3KsqColIWoFCKZFyPcT18tAQaFGyeqIC3QN0fWvatBGh2nGCX42sW1KjhDIiG2o5LEqZmoJDGmgHX+69NLGB05Fxjs2MXTsKEYBghtBxHJpJWcb2feWGZBEhfEnY3CIjG4KDbcVWXn0r2uhHn03siGEx93ZVtyWVGTHSk4DRLgVmXsTF6yLTzDSFNkBxCOLTe1Mj3RxK7As6ChKja5Q0zVtKTIrJqsE4C8AAAA4XRSTlMA8cqQFwT8AQMC+AGeEP4h/vz7/Ez68oJtd+eX/fLxt6Sd/CioFVbkiPv+8v34/vn7j/v7Vk8YMb/8Mcc+/ub7/v7+/fzqlf7623H6+vr++yf9979Gvv6a/v1++vUI/u9FPvzI0dPv1mRH/mP49qX0/rL98vn7//////////////////////7////////////////////////////////////////////////////////////+///////////////////////////////////////////////////+//7+//45abv2AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAD0UlEQVQ4y2NgoBPgQAKsnHBhThCfHUkdJ4oudpgUOyoXBEykDZkhwJBZQxmmgsFKTU3NlJeBHW6exsQHjxuh4PF+V2WwFZwMIt5X96/SseBl4Iaq45ctCioRMjY2FgICn6BVhgysIPNi0xf58HUY7YoCccEKAwKNai+sXXts7bFZx840Cx7kgSg0S9NdOqtywqJ4cQ4ObohCneJzff2dnX2dnZ2TOgQPKkIUsoi1VTTsmG3ru0ESbCY7A6+n3ryO1jVrZqx5dGTOQ4+3GjCFXBXvKmsXCirZiYA9BHS17O35h/8ePXr46J9JfKtSWUDCYBNn9pSXTxXItW8RB5vJwaByw2DrtmX7tu/bY7zZ2QbsaYiJC8p6sy7fM9iSxg9UBUTSJzVrru1Zvnx6lcB1Z3OYQkauir2PDjk4bJ15/Y5UAtBMDobMiYvZzq/bN2XvQ74lnpAQBimUW930/ceBbdfOzbFcpK4KVMnOIDFRZu7OPbPmCOrZQYIbqnDlEa1lF1+e3zmTb5d6ItBEVga3ibZLT7dPyJ+YAQ1esMKKWWsOHXi1/PiLlXMsH6SA3MnLtMSj/UrVPMcN4vCYBil8t+PQgW3Tq6vLm865X3XlZ1C13nVv0/or1b1zt+z2glstxrW0ZvXOZVuPT53WUN1eN+l+IYPEHaPOtdXV3dP6BBbL8sN9rXvX3//wuikXpjVN66lunqvfIun1y+DnrY8bN2681b85CRE8Tn5ftk+ZMmVyWVVlU1lVr6Cvt9Tv+d8+L3t69uz2mZt1pOHB4+R3sQsIZtX2lZVXziirm1+wyl3g6/J106dP7+qfINNiCooFcBTWdK2fPHlyz5nWSqChreW1AismrWyo7u7u6W4oW6i5RBqeejatn9zQ0NC0oKxmYV9te82njtUrVvb2NgNBe+8Kzec88NSz6XT31KkLWsvLKqsmPZwwYa6LvqAwGxsQAYFwzJJwuEJg6mltap3RWlU5Y9Icx/cfbk58s/hJPQQsjmgJgbuxYu+0HXVAUFNWVdfxeneLhRsTAlibwHwNVDhrau3sDpfZNU2VdbMvF93JBhmBlLFhMdM2s7u8f97B/Xf722u1tGpEbypCEwJEGQdUtZmY7tLe9s55l3brz53dt6C8ne0E0JvsCAAzVlUqWlRYmM3FXuq+DF9/WdUKths8yCYiyhnxDXqnTsVdUrfKy9lyrn3FM7CJWIsuSRUFILBhYEi+LSrMJix6UhG7QpgjWBkkWyKVlMIWtYiglWdwb3ECAQcHKKuEysvLB0swsBMoPzlR7cBX0oLDg5NhUAEAnIlrwNDYnTEAAAAASUVORK5CYII=")  20 20;
+
+    /* Rôles utilisés par la page : modifie ces 3 lignes pour tout changer */
+    --cursor-default:    var(--cursor-tetris);  /* page, labels, card   */
+    --cursor-input:      var(--cursor-beam);    /* champs de saisie     */
+    --cursor-action:     var(--cursor-hand);    /* boutons et liens     */
+  }
+
+  html, body, label, .card, main { cursor: var(--cursor-default), auto; }
+  input, textarea, select { cursor: var(--cursor-input), text; }
+  button, button:active, a { cursor: var(--cursor-action), pointer; }
+  button:disabled, input:disabled, [aria-disabled="true"] { cursor: var(--cursor-blocked), not-allowed; }
+
+  /* Classes utilitaires, une par curseur du pack */
+  .cursor-tetris { cursor: var(--cursor-tetris), auto; }
+  .cursor-cross { cursor: var(--cursor-cross), auto; }
+  .cursor-cycle { cursor: var(--cursor-cycle), auto; }
+  .cursor-beam { cursor: var(--cursor-beam), auto; }
+  .cursor-arrows { cursor: var(--cursor-arrows), auto; }
+  .cursor-hand { cursor: var(--cursor-hand), auto; }
+  .cursor-blocked { cursor: var(--cursor-blocked), auto; }
+  .cursor-question { cursor: var(--cursor-question), auto; }
+  .cursor-timer { cursor: var(--cursor-timer), auto; }
+</style>
+</head>
+<body>
+  <main>
+    <h1>red<br>tetris</h1>
+    <div class="card">
+      <form onsubmit="event.preventDefault(); alert('Join : ' + room.value + ' / ' + player.value);">
+        <label>Room
+          <input id="room" name="room" type="text" placeholder="ex : room42" required autocomplete="off">
+        </label>
+        <label>Name
+          <input id="player" name="name" type="text" placeholder="ex : Alex" required autocomplete="off">
+        </label>
+        <button type="submit">Join</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>
