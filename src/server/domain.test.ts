@@ -1,10 +1,39 @@
 import { describe, it, expect } from 'vitest'
-import { Game } from './domain.ts'
+import { Game, Piece } from './domain.ts'
 import { HORIZON_LENGTH, type PieceKind } from '../shared/protocol.ts'
 
 function freshRoom(): Game {
   return new Game('zen')
 }
+
+describe('Piece', () => {
+  it('serializes to the wire payload without mutating the piece', () => {
+    const piece = new Piece('T', 4)
+    const next: PieceKind[] = ['I', 'O']
+    const payload = piece.toPayload(next)
+    expect(payload).toEqual({ type: 'T', index: 4, next: ['I', 'O'] })
+    expect(piece.type).toBe('T')
+    expect(piece.index).toBe(4)
+  })
+
+  it('gives every piece of a shared sequence a distinct contiguous index', () => {
+    const game = freshRoom()
+    game.addPlayer('alice', 's1')
+    game.start()
+    game.pieceFor('s1')
+    game.pieceFor('s1')
+    const indexes = game.sequence.map((piece) => piece.index)
+    expect(indexes.length).toBeGreaterThan(1)
+    expect(new Set(indexes).size).toBe(indexes.length)
+    expect(indexes).toEqual(indexes.map((_, position) => position))
+  })
+
+  it('never stores the look-ahead horizon on the instance', () => {
+    const piece = new Piece('S', 0)
+    piece.toPayload(['L', 'J', 'Z'])
+    expect('next' in piece).toBe(false)
+  })
+})
 
 describe('Game.players & host', () => {
   it('first player becomes host, next joins as guest', () => {
