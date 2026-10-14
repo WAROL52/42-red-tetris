@@ -1,4 +1,11 @@
-import { HORIZON_LENGTH, type GameStatus, type PieceKind } from '../shared/protocol.ts'
+import {
+  HORIZON_LENGTH,
+  type GameStatus,
+  type PieceKind,
+  type ServerToClientEvents,
+} from '../shared/protocol.ts'
+
+type PiecePayload = Parameters<ServerToClientEvents['piece']>[0]
 
 const BAG: PieceKind[] = ['I', 'O', 'T', 'S', 'Z', 'J', 'L']
 
@@ -11,6 +18,31 @@ function shuffle<T>(input: readonly T[]): T[] {
     items[j] = tmp
   }
   return items
+}
+
+/**
+ * Piece: one occurrence in the shared sequence of a room. The server is only
+ * responsible for the distribution (which occurrence, to which player, with
+ * which look-ahead horizon); shape, rotation and gravity live on the client as
+ * pure functions.
+ */
+class Piece {
+  readonly type: PieceKind
+  readonly index: number
+
+  constructor(type: PieceKind, index: number) {
+    this.type = type
+    this.index = index
+  }
+
+  /**
+   * Wire payload for the `piece` event. `next` is derived from the sequence at
+   * send time and is NEVER stored on the instance: it would be duplicated and
+   * could go stale as soon as the sequence grows.
+   */
+  toPayload(next: PieceKind[]): PiecePayload {
+    return { type: this.type, index: this.index, next }
+  }
 }
 
 /**
@@ -43,7 +75,7 @@ class Player {
  */
 class Game {
   readonly room: string
-  readonly sequence: PieceKind[]
+  readonly sequence: Piece[]
   status: GameStatus
   round: number
   players: Map<string, Player>
@@ -71,11 +103,13 @@ class Game {
     }
     return player
   }
-  getPlayerByName(name: string){
+  getPlayerByName(name: string): Player | null {
     for (const player of this.players.values()) {
-      if(player.name===name) return  player;
+      if (player.name === name) {
+        return player
+      }
     }
-    return null;
+    return null
   }
 
   removePlayer(socketId: string): void {
@@ -137,30 +171,36 @@ class Game {
 
   private ensureSequence(length: number): void {
     while (this.sequence.length < length) {
-      this.sequence.push(...shuffle(BAG))
+      for (const type of shuffle(BAG)) {
+        this.sequence.push(new Piece(type, this.sequence.length))
+      }
     }
+  }
+
+  /** The look-ahead horizon served right after `piece`. */
+  private horizonAfter(piece: Piece, length = HORIZON_LENGTH): PieceKind[] {
+    return Array.from({ length }, (_, i) => this.sequence[piece.index + 1 + i]!.type)
   }
 
   /** The horizon after the first piece of a fresh round. */
   nextQueue(): PieceKind[] {
     this.ensureSequence(1 + HORIZON_LENGTH)
-    return Array.from({ length: HORIZON_LENGTH }, (_, i) => this.sequence[1 + i]!)
+    return this.horizonAfter(this.sequence[0]!)
   }
 
   /**
    * Next piece for `socketId` in the shared sequence, with a look-ahead
    * horizon. All players read the same sequence; indexes may differ.
    */
-  pieceFor(socketId: string): { type: PieceKind; index: number; next: PieceKind[] } | null {
+  pieceFor(socketId: string): PiecePayload | null {
     const player = this.players.get(socketId)
     if (player === undefined || player.eliminated) {
       return null
     }
-    const index = player.nextIndex
-    this.ensureSequence(index + 1 + HORIZON_LENGTH)
-    const next = Array.from({ length: HORIZON_LENGTH }, (_, i) => this.sequence[index + 1 + i]!)
+    this.ensureSequence(player.nextIndex + 1 + HORIZON_LENGTH)
+    const current = this.sequence[player.nextIndex]!
     player.nextIndex += 1
-    return { type: this.sequence[index]!, index, next }
+    return current.toPayload(this.horizonAfter(current))
   }
 
   /**
@@ -182,4 +222,4 @@ class Game {
   }
 }
 
-export { Player, Game }
+export { Player, Piece, Game }

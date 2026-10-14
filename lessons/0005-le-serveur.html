@@ -14,9 +14,9 @@
   <p>
     Le serveur a une structure <em>exactement inverse</em> du client. Là où le
     client est fonctionnel (fonctions pures + reducer), le serveur est
-    <strong>objet</strong> : deux classes <code>Player</code> et <code>Game</code>
-    qui utilisent <code>this</code> (c'est l'un des seuls endroits où c'est
-    autorisé — la spec l'impose).
+    <strong>objet</strong> : trois classes <code>Player</code>, <code>Piece</code>
+    et <code>Game</code> qui utilisent <code>this</code> (c'est l'un des seuls
+    endroits où c'est autorisé — la spec l'impose).
   </p>
 
   <h2>1. Pourquoi des prototypes côté serveur</h2>
@@ -93,13 +93,21 @@ players.reset()
     <code>useEffect([round])</code>) quand la partie redémarre.
   </p>
 
-  <h3>3.2 La séquence partagée (7-bag)</h3>
-  <pre><code>private sequence: PieceKind[]
+<h3>3.2 La séquence partagée (7-bag)</h3>
+  <pre><code>private sequence: Piece[]
 private ensureSequence(length: number): void {
-  while (this.sequence.length < length) {
-    this.sequence.push(...shuffle(BAG))   // mélange Fisher-Yates
+  while (this.sequence.length &lt; length) {
+    for (const type of shuffle(BAG)) {   // mélange Fisher-Yates
+      this.sequence.push(new Piece(type, this.sequence.length))
+    }
   }
 }</code></pre>
+  <p>
+    La séquence contient des <code>Piece</code>, pas des lettres : chaque
+    occurrence connaît son <code>type</code> <em>et</em> son <code>index</code>
+    canonique dans la room. Le serveur ne fait que <em>distribuer</em> — la forme,
+    la rotation et la gravité sont côté client, en fonctions pures.
+  </p>
   <p>
     Chaque joueur a son <code>nextIndex</code> propre, mais tout le monde
     consomme la <em>même</em> <code>sequence</code>. Résultat : Alice à l'index
@@ -203,7 +211,7 @@ if (game.playerCount() === 0) {
       <label><input type="radio" name="q1" value="c"> Trois (<code>Player</code>, <code>Piece</code>, <code>Game</code>).</label>
     </div>
     <button type="submit" class="reveal">Voir la réponse</button>
-    <div class="answer"><strong>B.</strong> Le sujet mentionne <code>Piece</code> comme « classe » mais en pratique, <code>Piece</code> n'existe pas comme type runtime côté serveur — la pièce est un <code>PieceKind</code> (string union) et c'est le client qui gère sa position via <code>FallingPiece</code>. Côté serveur, on n'a besoin que de <code>Player</code> et <code>Game</code>.</div>
+    <div class="answer"><strong>C.</strong> Le sujet impose « <em>at minimum</em>, <code>Player</code>, <code>Piece</code> et <code>Game</code> ». <code>Piece</code> existe bien comme classe runtime : elle représente <em>une occurrence</em> dans la séquence partagée (<code>type</code> + <code>index</code> canonique) et sait se sérialiser en payload réseau via <code>toPayload(next)</code>. Attention à ne pas la confondre avec <code>FallingPiece</code> côté client, qui est la pièce <em>en train de tomber</em> (position, rotation, grounded) et vit dans le moteur pur.</div>
   </form>
 
   <form class="quiz" onsubmit="event.preventDefault();this.classList.add('show')">

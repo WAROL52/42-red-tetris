@@ -152,11 +152,10 @@ topOut(socketId) {
   <pre><code>pieceFor(socketId) {
   const p = this.players.get(socketId)
   if (!p || p.eliminated) return null
-  const index = p.nextIndex
-  this.ensureSequence(index + 1 + HORIZON_LENGTH)   // pré-génère au besoin
-  const next = ...sequence slice...
+  this.ensureSequence(p.nextIndex + 1 + HORIZON_LENGTH)   // pré-génère au besoin
+  const current = this.sequence[p.nextIndex]              // une Piece
   p.nextIndex += 1
-  return { type: this.sequence[index], index, next }
+  return current.toPayload(this.horizonAfter(current))
 }</code></pre>
   <ul>
     <li><strong>Même séquence</strong>: chaque joueur lit le même tableau
@@ -166,6 +165,9 @@ topOut(socketId) {
     <li><strong>Pré-génération paresseuse</strong>: <code>ensureSequence</code> étend
       la séquence (via le 7-bag) seulement si besoin — on ne génère pas 1000 pièces
       d'avance.</li>
+    <li><strong><code>Piece.toPayload(next)</code></strong>: la pièce sait se
+      sérialiser pour le réseau, mais <code>next</code> est dérivé de la séquence
+      à l'envoi et n'est jamais stocké sur l'instance.</li>
   </ul>
   <p>
     Chaque joueur qui fait un <code>lock</code> déclenche un <code>pieceFor</code>
