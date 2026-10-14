@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { GameProvider, useStore } from '../store/GameProvider.tsx'
+import type { PenaltyMode } from '../../shared/protocol'
 import { GameSession } from '../GameSession.tsx'
 import { BoardView } from '../components/BoardView.tsx'
 import { SpectrumView } from '../components/SpectrumView.tsx'
@@ -27,15 +29,26 @@ function StatusBanner() {
 
 function HostControls() {
   const { state, send } = useStore()
+  const [penaltyMode, setPenaltyMode] = useState<PenaltyMode>('byNewFromBottom')
   const self = state.players.find((p) => p.id === state.socketId)
   if (self?.isHost !== true) {
     return null
   }
   if (state.status === 'waiting') {
     return (
-      <button type="button" onClick={() => send('start')} disabled={state.players.length === 0}>
-        start
-      </button>
+      <div className="host-controls">
+        <label>
+          penalty mode
+          <select value={penaltyMode} onChange={(e) => setPenaltyMode(e.target.value as PenaltyMode)}>
+            <option value="byHole">by hole</option>
+            <option value="byDisableLines">disable lines</option>
+            <option value="byNewFromBottom">new from bottom</option>
+          </select>
+        </label>
+        <button type="button" onClick={() => send('start', { penaltyMode })} disabled={state.players.length === 0}>
+          start
+        </button>
+      </div>
     )
   }
   if (state.status === 'finished') {

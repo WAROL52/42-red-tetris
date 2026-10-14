@@ -3,6 +3,7 @@ import {
   type GameStatus,
   type PieceKind,
   type ServerToClientEvents,
+  type PenaltyMode,
 } from '../shared/protocol.ts'
 
 type PiecePayload = Parameters<ServerToClientEvents['piece']>[0]
@@ -80,15 +81,17 @@ class Game {
   round: number
   players: Map<string, Player>
   hostId: string | null
+  penaltyMode: PenaltyMode
 
   constructor(room: string) {
     this.room = room
     this.sequence = []
     this.status = 'waiting'
     this.round = 0
-    this.players = new Map()
-    this.hostId = null
-  }
+      this.players = new Map()
+      this.hostId = null
+      this.penaltyMode = 'byNewFromBottom'
+    }
 
   playerCount(): number {
     return this.players.size
@@ -143,9 +146,12 @@ class Game {
   }
 
   /** waiting → running. Returns false when not admissible. */
-  start(): boolean {
+  start(penaltyMode?: PenaltyMode): boolean {
     if (this.status !== 'waiting') {
       return false
+    }
+    if (penaltyMode !== undefined) {
+      this.penaltyMode = penaltyMode
     }
     this.beginRound()
     return true

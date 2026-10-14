@@ -205,13 +205,13 @@ describe('gravity & local actions', () => {
 })
 
 describe('garbage', () => {
-  it('translates a line clear into count-1 garbage rows', () => {
+  it('applies the received penalty line count to the field', () => {
     let s = withPiece(makeRunning(home()), 'I')
     for (let i = 0; i < 30 && s.engine.piece !== null; i++) {
       s = reducer(s, { type: 'GRAVITY_TICK' })
     }
     s = reducer(s, { type: 'REPORT_SENT' })
-    s = reducer(s, { type: 'OPPONENT_LINES', payload: { count: 4 } })
+    s = reducer(s, { type: 'OPPONENT_LINES', payload: { count: 3 } })
     const bottom = s.engine.board[s.engine.board.length - 3]
     expect(bottom).toBeDefined()
     const garbageRows = s.engine.board.slice(19)
@@ -221,9 +221,9 @@ describe('garbage', () => {
     expect(s.garbageIncoming).toBe(1)
   })
 
-  it('single line clear sends no garbage', () => {
+  it('zero penalty lines send no garbage', () => {
     const before = withPiece(makeRunning(home()), 'I')
-    const after = reducer(before, { type: 'OPPONENT_LINES', payload: { count: 1 } })
+    const after = reducer(before, { type: 'OPPONENT_LINES', payload: { count: 0 } })
     expect(after.engine.board).toEqual(before.engine.board)
   })
 })

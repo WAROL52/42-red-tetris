@@ -5,6 +5,7 @@ export type MoveAction = 'left' | 'right' | 'rotate' | 'down' | 'harddrop'
 export type GameStatus = 'waiting' | 'running' | 'finished'
 
 export const HORIZON_LENGTH = 3
+export type PenaltyMode = 'byHole' | 'byDisableLines' | 'byNewFromBottom'
 
 /** Presentation colors; the server never needs them. */
 export const PIECE_COLORS: Record<PieceKind, string> = {
@@ -33,12 +34,13 @@ export interface RoomState {
   status: GameStatus
   round: number
   players: PlayerPublic[]
+  penaltyMode?: PenaltyMode
 }
 
 export interface ClientToServerEvents {
   join: (payload: { room: string; playerName: string }) => void
   leave: () => void
-  start: () => void
+  start: (payload?: { penaltyMode?: PenaltyMode }) => void
   restart: () => void
   move: (payload: { action: MoveAction }) => void
   lock: (payload: { spectrum: number[] }) => void
@@ -53,7 +55,7 @@ export interface ServerToClientEvents {
   playerLeft: (payload: { room: string; playerName: string }) => void
   playerEliminated: (payload: { playerName: string }) => void
   host: (payload: { playerName: string }) => void
-  gameStarted: (payload: { room: string; round: number; players: PlayerPublic[]; queue: PieceKind[] }) => void
+  gameStarted: (payload: { room: string; round: number; players: PlayerPublic[]; queue: PieceKind[]; penaltyMode?: PenaltyMode }) => void
   piece: (payload: { type: PieceKind; index: number; next: PieceKind[] }) => void
   spectrum: (payload: { playerName: string; spectrum: number[] }) => void
   penalty: (payload: { lines: number }) => void

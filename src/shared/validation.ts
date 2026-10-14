@@ -1,4 +1,4 @@
-import type { MoveAction, PieceKind } from './protocol.ts'
+import type { MoveAction, PieceKind, PenaltyMode } from './protocol.ts'
 import { HORIZON_LENGTH } from './protocol.ts'
 
 export const NAME_PATTERN = /^[\w-]{1,24}$/
@@ -18,6 +18,7 @@ export const ACTIONS: readonly MoveAction[] = [
 ] as const
 
 const PIECES: readonly PieceKind[] = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'] as const
+const PENALTY_MODES: readonly PenaltyMode[] = ['byHole', 'byDisableLines', 'byNewFromBottom'] as const
 
 export function isValidName(value: string): boolean {
   return NAME_PATTERN.test(value.trim())
@@ -48,6 +49,10 @@ export function isValidPieceIndex(index: number): boolean {
 
 export function isValidPiece(type: string): type is PieceKind {
   return (PIECES as readonly string[]).includes(type)
+}
+
+export function isValidPenaltyMode(mode: unknown): mode is PenaltyMode {
+  return (PENALTY_MODES as readonly string[]).includes(mode as string)
 }
 
 export function isValidHorizon(queue: PieceKind[]): boolean {

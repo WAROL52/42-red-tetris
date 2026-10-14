@@ -1,5 +1,5 @@
 import type { Server } from 'socket.io'
-import { isValidName, isValidSpectrum } from '../shared/validation.ts'
+import { isValidName, isValidSpectrum, isValidPenaltyMode } from '../shared/validation.ts'
 import type {
   ClientToServerEvents,
   PlayerPublic,
@@ -28,6 +28,7 @@ function roomState(game: Game): RoomState {
     status: game.status,
     round: game.round,
     players: [...game.players.values()].map(playerPublic),
+    penaltyMode: game.penaltyMode,
   }
 }
 
@@ -91,13 +92,18 @@ export function attachSockets(io: TetrisServer): void {
       removePlayer(io, socket.id, socket.data.room as string | undefined)
     })
 
-    socket.on('start', () => {
+    socket.on('start', (payload) => {
       const game = requireGame(socket.id)
       if (game === null || game.hostId !== socket.id) {
         socket.emit('error', { message: 'Only the host can start the game.' })
         return
       }
-      if (!game.start()) {
+      const mode = payload?.penaltyMode
+      if (mode !== undefined && !isValidPenaltyMode(mode)) {
+        socket.emit('error', { message: 'Invalid penalty mode.' })
+        return
+      }
+      if (!game.start(mode)) {
         socket.emit('error', { message: 'Game already running.' })
         return
       }
@@ -197,6 +203,7 @@ function announceRound(io: TetrisServer, game: Game): void {
     round: game.round,
     players: [...game.players.values()].map(playerPublic),
     queue: game.nextQueue(),
+    penaltyMode: game.penaltyMode,
   })
   for (const player of game.players.values()) {
     const piece = game.pieceFor(player.socketId)

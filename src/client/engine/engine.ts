@@ -1,4 +1,4 @@
-import type { PieceKind, MoveAction } from '../../shared/protocol.ts'
+import type { PieceKind, MoveAction, PenaltyMode } from '../../shared/protocol.ts'
 import type { Rng } from './seed.ts'
 
 const GARBAGE = 'X'
@@ -398,6 +398,81 @@ export function applyGarbage(state: GameState, rows: GarbageRow[]): GameState {
     }
   }
   return { ...merged, board }
+}
+
+/* ------------------------------------------------------------------ */
+/* Penalty handlers                                                     */
+/* ------------------------------------------------------------------ */
+
+export type PenaltyHandler = (state: GameState, lines: number, rng: Rng) => GameState
+
+export function penaltyHandlerByHole(state: GameState, lines: number, rng: Rng): GameState {
+  if (lines <= 0) {
+    return state.piece !== null ? lockPiece(state) : state
+  }
+  let merged = state
+  if (merged.piece !== null) {
+    merged = lockPiece(merged)
+  }
+  const rows = Array.from({ length: lines }, () => makeGarbageRow(rng))
+  return applyGarbage(merged, rows)
+}
+
+export function penaltyHandlerByDisableLines(state: GameState, lines: number, rng: Rng): GameState {
+  let merged = state
+  if (merged.piece !== null) {
+    merged = lockPiece(merged)
+  }
+  if (lines <= 0) {
+    return merged
+  }
+  const board = merged.board.map((row) => [...row])
+  const start = Math.max(0, TOTAL_ROWS - lines)
+  for (let r = start; r < TOTAL_ROWS; r++) {
+    const row = board[r]!
+    const holes: number[] = []
+    for (let c = 0; c < COLS; c++) {
+      if (row[c] === null) {
+        holes.push(c)
+      }
+    }
+    if (holes.length === 0) {
+      const hole = Math.floor(rng() * COLS)
+      row[hole] = null
+    } else if (holes.length > 1) {
+      const keepIndex = Math.floor(rng() * holes.length)
+      const keep = holes[keepIndex]!
+      for (const c of holes) {
+        if (c !== keep) {
+          row[c] = GARBAGE
+        }
+      }
+    }
+  }
+  return { ...merged, board }
+}
+
+export function penaltyHandlerByNewFromBottom(state: GameState, lines: number, rng: Rng): GameState {
+  if (lines <= 0) {
+    return state.piece !== null ? lockPiece(state) : state
+  }
+  let merged = state
+  if (merged.piece !== null) {
+    merged = lockPiece(merged)
+  }
+  const rows = Array.from({ length: lines }, () => makeGarbageRow(rng))
+  return applyGarbage(merged, rows)
+}
+
+export const penaltyHandlers: Record<PenaltyMode, PenaltyHandler> = {
+  byHole: penaltyHandlerByHole,
+  byDisableLines: penaltyHandlerByDisableLines,
+  byNewFromBottom: penaltyHandlerByNewFromBottom,
+}
+
+export function applyPenaltyMode(state: GameState, mode: PenaltyMode, lines: number, rng: Rng): GameState {
+  const handler = penaltyHandlers[mode]
+  return handler(state, lines, rng)
 }
 
 export function applyAction(state: GameState, action: MoveAction): GameState {

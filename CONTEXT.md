@@ -14,6 +14,8 @@ Glossary for 42-red-tetris. Implementation-agnostic; see `docs/red-tetris-spec.m
 - **locked piece** — a piece that has come to rest and been merged into the field.
 - **cleared lines** — rows completed by a player's lock; each clears n−1 penalty rows toward opponents.
 - **garbage row** — an indestructible penalty row (full of blocks except one random hole, so it can never be cleared) inserted at the bottom of an opponent's field, pushing the stack up.
+- **penalty mode** — the selected style of penalty applied to opponents' fields for a round: `byHole`, `byDisableLines`, or `byNewFromBottom`.
+- **penalty handler** — a pure transform of a player's field that applies the penalty rows of a penalty mode.
 - **spectrum** — a compact per-column height view of a player's field, relayed in real time so opponents see it update live.
 - **top-out** — a player's failure: the field has room for no new piece. The client detects it and reports it; a round ends when one player remains.
 - **round** — a single playthrough from start to game-over inside a room; the host restarts the next round.

@@ -60,7 +60,7 @@ describe('GameScreen', () => {
     expect(screen.getByText('zen — round 0')).toBeDefined()
     expect(screen.getByText('alice (host)')).toBeDefined()
     fireEvent.click(screen.getByText('start'))
-    expect(storeRef.send).toHaveBeenCalledWith('start')
+    expect(storeRef.send).toHaveBeenCalledWith('start', { penaltyMode: 'byNewFromBottom' })
   })
 
   it('runs the field with the next queue and keyboard moves', () => {

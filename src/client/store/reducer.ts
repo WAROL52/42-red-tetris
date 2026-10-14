@@ -1,10 +1,9 @@
-import type { GameStatus, MoveAction, PieceKind, PlayerPublic, RoomState } from '../../shared/protocol.ts'
+import type { GameStatus, MoveAction, PieceKind, PlayerPublic, RoomState, PenaltyMode } from '../../shared/protocol.ts'
 import {
   applyAction,
-  applyGarbage,
+  applyPenaltyMode,
   clearLines,
   createGame,
-  makeGarbageRow,
   spawn,
   tick,
   type GameState,
@@ -26,6 +25,7 @@ export interface RootState {
   currentIndex: number
   garbageSeed: number
   garbageIncoming: number
+  penaltyMode: PenaltyMode
   justLocked: boolean
   lastCleared: number
   penalityLines:number
@@ -40,7 +40,7 @@ export type Action =
   | { type: 'PLAYER_ELIMINATED'; payload: { playerName: string } }
   | { type: 'HOST_CHANGED'; payload: { playerName: string } }
   | { type: 'PLAYER_SPECTRUM'; payload: { playerName: string; spectrum: number[] } }
-  | { type: 'GAME_STARTED'; payload: { round: number; players: PlayerPublic[]; queue: PieceKind[] } }
+  | { type: 'GAME_STARTED'; payload: { round: number; players: PlayerPublic[]; queue: PieceKind[]; penaltyMode?: PenaltyMode } }
   | { type: 'PIECE'; payload: { type: PieceKind; index: number; next: PieceKind[] } }
   | { type: 'GRAVITY_TICK' }
   | { type: 'LOCAL_ACTION'; payload: { action: MoveAction } }
@@ -75,7 +75,8 @@ export function initialState(room: string, playerName: string): RootState {
     garbageIncoming: 0,
     justLocked: false,
     lastCleared: 0,
-	penalityLines:0
+	penalityLines:0,
+    penaltyMode: 'byNewFromBottom'
   }
 }
 
@@ -115,6 +116,7 @@ export function reducer(state: RootState, action: Action): RootState {
         status: action.payload.status,
         round: action.payload.round,
         players: mergePlayers(state.players, action.payload.players),
+        penaltyMode: action.payload.penaltyMode ?? state.penaltyMode,
       }
 
     case 'PLAYER_JOINED':
@@ -162,6 +164,7 @@ export function reducer(state: RootState, action: Action): RootState {
         garbageIncoming: 0,
         justLocked: false,
         lastCleared: 0,
+        penaltyMode: action.payload.penaltyMode ?? state.penaltyMode,
       }
 
     case 'PIECE':
@@ -199,15 +202,14 @@ export function reducer(state: RootState, action: Action): RootState {
     }
 
     case 'OPPONENT_LINES': {
-      const lines = Math.max(0, action.payload.count - 1)
+      const lines = Math.max(0, action.payload.count)
       if (lines === 0) {
         return state
       }
       const rng = mulberry32(state.garbageSeed + state.garbageIncoming)
-      const rows = Array.from({ length: lines }, () => makeGarbageRow(rng))
       return {
         ...state,
-        engine: applyGarbage(state.engine, rows),
+        engine: applyPenaltyMode(state.engine, state.penaltyMode, lines, rng),
         garbageIncoming: state.garbageIncoming + 1,
       }
     }
