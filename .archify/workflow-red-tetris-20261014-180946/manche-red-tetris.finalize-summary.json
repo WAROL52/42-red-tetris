@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "workflow",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/workflow-red-tetris-20261014-180946/candidate.json",
+    "sha256": "39e707aed41f1b662c325067ee2f20fa4c3100b3dc537fee3f9791c2864257ef",
+    "bytes": 43727
+  },
+  "artifact": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/workflow-red-tetris-20261014-180946/manche-red-tetris.html",
+    "sha256": "6fe84793ba9e7b3cca9ecef7d43d44567a562b306725615fc9b94415245ccbb0",
+    "bytes": 843383
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/rrabetsy/42/42-red-tetris/.archify/workflow-red-tetris-20261014-180946/manche-red-tetris.finalize.json",
+    "summaryReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/workflow-red-tetris-20261014-180946/manche-red-tetris.finalize-summary.json",
+    "browserCheckReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/workflow-red-tetris-20261014-180946/manche-red-tetris.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.1.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-14T15:04:01.423Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2770
+}

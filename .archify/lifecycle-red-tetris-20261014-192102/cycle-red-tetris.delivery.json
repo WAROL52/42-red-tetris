@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "7c36f578-1dc1-4469-8ad4-0ec0a2dbf1b7",
+  "status": "current",
+  "command": "deliver",
+  "type": "lifecycle",
+  "input": "/home/rrabetsy/42/42-red-tetris/.archify/lifecycle-red-tetris-20261014-192102/candidate.json",
+  "output": "/home/rrabetsy/42/42-red-tetris/.archify/lifecycle-red-tetris-20261014-192102/cycle-red-tetris.html",
+  "specification": {
+    "sha256": "b7ee809206c13dee49b5812e7462ad43dd49a8d3e850b10b7256c5d8e1080e59",
+    "bytes": 42155
+  },
+  "artifact": {
+    "sha256": "b8242a4d84a86b27ce62a8eaa4ad4ed56802aae6da3415925a420318bdee62b4",
+    "bytes": 852128
+  }
+}

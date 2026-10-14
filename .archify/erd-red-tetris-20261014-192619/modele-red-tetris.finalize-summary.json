@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "erd",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/erd-red-tetris-20261014-192619/candidate.json",
+    "sha256": "567ae624f2d61758180c61154c73e6d40cb144fce301b95946d03711a233969e",
+    "bytes": 36618
+  },
+  "artifact": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/erd-red-tetris-20261014-192619/modele-red-tetris.html",
+    "sha256": "5c680b8d16972ba9975450fc9ee0088e1eab8a1a457708c8f51ae168dba90b16",
+    "bytes": 829219
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/rrabetsy/42/42-red-tetris/.archify/erd-red-tetris-20261014-192619/modele-red-tetris.finalize.json",
+    "summaryReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/erd-red-tetris-20261014-192619/modele-red-tetris.finalize-summary.json",
+    "browserCheckReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/erd-red-tetris-20261014-192619/modele-red-tetris.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.1.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-14T15:04:01.423Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2431
+}

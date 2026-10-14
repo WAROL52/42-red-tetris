@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "sequence",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/sequence-red-tetris-20261014-190144/candidate.json",
+    "sha256": "8d8705b3f8611af3ac3c872035eaf2ce562a43f5a27af7497b79e407289a0a6d",
+    "bytes": 41861
+  },
+  "artifact": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/sequence-red-tetris-20261014-190144/verrou-red-tetris.html",
+    "sha256": "be8e28e0bfb82fbb75ea58e3b78930577cad4cce057b85199f500c563edff259",
+    "bytes": 822582
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/rrabetsy/42/42-red-tetris/.archify/sequence-red-tetris-20261014-190144/verrou-red-tetris.finalize.json",
+    "summaryReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/sequence-red-tetris-20261014-190144/verrou-red-tetris.finalize-summary.json",
+    "browserCheckReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/sequence-red-tetris-20261014-190144/verrou-red-tetris.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.1.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-14T15:04:01.423Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2696
+}

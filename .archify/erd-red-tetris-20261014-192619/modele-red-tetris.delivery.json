@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "f572ae66-5a21-437d-8ac6-7ab59a1c935a",
+  "status": "current",
+  "command": "deliver",
+  "type": "erd",
+  "input": "/home/rrabetsy/42/42-red-tetris/.archify/erd-red-tetris-20261014-192619/candidate.json",
+  "output": "/home/rrabetsy/42/42-red-tetris/.archify/erd-red-tetris-20261014-192619/modele-red-tetris.html",
+  "specification": {
+    "sha256": "567ae624f2d61758180c61154c73e6d40cb144fce301b95946d03711a233969e",
+    "bytes": 36618
+  },
+  "artifact": {
+    "sha256": "5c680b8d16972ba9975450fc9ee0088e1eab8a1a457708c8f51ae168dba90b16",
+    "bytes": 829219
+  }
+}

@@ -1,7 +1,7 @@
 # Check list : 
 
-- [ ] Derniere version de js 
-- [ ] Class Pieces _P5 du sujets_
+- [X] Derniere version de js 
+- [X] Class Pieces _P5 du sujets_
 - [ ] Test coverage
 - [ ] Penalty lines
     - Holes

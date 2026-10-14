@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "791414e7-dbbc-4f1b-913c-0076570c7fb7",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/home/rrabetsy/42/42-red-tetris/.archify/sequence-red-tetris-20261014-190144/candidate.json",
+  "output": "/home/rrabetsy/42/42-red-tetris/.archify/sequence-red-tetris-20261014-190144/verrou-red-tetris.html",
+  "specification": {
+    "sha256": "8d8705b3f8611af3ac3c872035eaf2ce562a43f5a27af7497b79e407289a0a6d",
+    "bytes": 41861
+  },
+  "artifact": {
+    "sha256": "be8e28e0bfb82fbb75ea58e3b78930577cad4cce057b85199f500c563edff259",
+    "bytes": 822582
+  }
+}

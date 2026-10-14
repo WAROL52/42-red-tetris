@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "e92d96a7-ded3-417b-9d47-d22cc35c65ef",
+  "status": "current",
+  "command": "deliver",
+  "type": "dataflow",
+  "input": "/home/rrabetsy/42/42-red-tetris/.archify/dataflow-red-tetris-20261014-191104/candidate.json",
+  "output": "/home/rrabetsy/42/42-red-tetris/.archify/dataflow-red-tetris-20261014-191104/flux-red-tetris.html",
+  "specification": {
+    "sha256": "c2583b5b18b65cc0ca1cfbef8d0eddfaa7df97fd73a74321a7bd1ece88c61b54",
+    "bytes": 40020
+  },
+  "artifact": {
+    "sha256": "b80ef2c2a5dee56ebde1a00d470be72fc82b3e0843da3549609efb9a5a680909",
+    "bytes": 830799
+  }
+}

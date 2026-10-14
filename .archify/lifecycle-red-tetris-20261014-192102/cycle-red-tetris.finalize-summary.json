@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "lifecycle",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/lifecycle-red-tetris-20261014-192102/candidate.json",
+    "sha256": "b7ee809206c13dee49b5812e7462ad43dd49a8d3e850b10b7256c5d8e1080e59",
+    "bytes": 42155
+  },
+  "artifact": {
+    "path": "/home/rrabetsy/42/42-red-tetris/.archify/lifecycle-red-tetris-20261014-192102/cycle-red-tetris.html",
+    "sha256": "b8242a4d84a86b27ce62a8eaa4ad4ed56802aae6da3415925a420318bdee62b4",
+    "bytes": 852128
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/rrabetsy/42/42-red-tetris/.archify/lifecycle-red-tetris-20261014-192102/cycle-red-tetris.finalize.json",
+    "summaryReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/lifecycle-red-tetris-20261014-192102/cycle-red-tetris.finalize-summary.json",
+    "browserCheckReceipt": "/home/rrabetsy/42/42-red-tetris/.archify/lifecycle-red-tetris-20261014-192102/cycle-red-tetris.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.1.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-14T15:04:01.423Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2720,
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 9
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "t-start",
+            "from": "hote",
+            "to": "manche",
+            "label": "start",
+            "collectionIndex": 1,
+            "artifactIndex": 2
+          },
+          "right": {
+            "id": "t-relance",
+            "from": "attente",
+            "to": "relance",
+            "label": "host restart",
+            "collectionIndex": 17,
+            "artifactIndex": 18
+          },
+          "point": [
+            254,
+            186
+          ]
+        },
+        {
+          "left": {
+            "id": "t-gravite",
+            "from": "joueur",
+            "to": "verrou",
+            "label": "gravité + lock",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "right": {
+            "id": "t-nouvel-hote",
+            "from": "abandon",
+            "to": "hote",
+            "label": "hôte↑",
+            "collectionIndex": 13,
+            "artifactIndex": 14
+          },
+          "point": [
+            348.59999999999997,
+            360
+          ]
+        },
+        {
+          "left": {
+            "id": "t-next",
+            "from": "verrou",
+            "to": "joueur",
+            "label": "pièce suivante",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "right": {
+            "id": "t-nouvel-hote",
+            "from": "abandon",
+            "to": "hote",
+            "label": "hôte↑",
+            "collectionIndex": 13,
+            "artifactIndex": 14
+          },
+          "point": [
+            600,
+            360
+          ]
+        },
+        {
+          "left": {
+            "id": "t-applique",
+            "from": "penalite",
+            "to": "joueur",
+            "label": "pile monte",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "right": {
+            "id": "t-nouvel-hote",
+            "from": "abandon",
+            "to": "hote",
+            "label": "hôte↑",
+            "collectionIndex": 13,
+            "artifactIndex": 14
+          },
+          "point": [
+            626,
+            360
+          ]
+        },
+        {
+          "left": {
+            "id": "t-deux",
+            "from": "joueur",
+            "to": "topout",
+            "label": "champ plein",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "right": {
+            "id": "t-nouvel-hote",
+            "from": "abandon",
+            "to": "hote",
+            "label": "hôte↑",
+            "collectionIndex": 13,
+            "artifactIndex": 14
+          },
+          "point": [
+            759.6000000000001,
+            360
+          ]
+        },
+        {
+          "left": {
+            "id": "t-elim",
+            "from": "topout",
+            "to": "elimine",
+            "label": "topOut",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "right": {
+            "id": "t-nouvel-hote",
+            "from": "abandon",
+            "to": "hote",
+            "label": "hôte↑",
+            "collectionIndex": 13,
+            "artifactIndex": 14
+          },
+          "point": [
+            807.6000000000001,
+            360
+          ]
+        },
+        {
+          "left": {
+            "id": "t-manche",
+            "from": "elimine",
+            "to": "manche",
+            "label": "2+",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "right": {
+            "id": "t-abandon",
+            "from": "manche",
+            "to": "abandon",
+            "label": "leave",
+            "collectionIndex": 12,
+            "artifactIndex": 13
+          },
+          "point": [
+            770,
+            186
+          ],
+          "sharedNode": "manche"
+        },
+        {
+          "left": {
+            "id": "t-victoire",
+            "from": "elimine",
+            "to": "vainqueur",
+            "label": "1",
+            "collectionIndex": 10,
+            "artifactIndex": 11
+          },
+          "right": {
+            "id": "t-abandon",
+            "from": "manche",
+            "to": "abandon",
+            "label": "leave",
+            "collectionIndex": 12,
+            "artifactIndex": 13
+          },
+          "point": [
+            835.4000000000001,
+            186
+          ]
+        }
+      ],
+      "detours": [],
+      "truncated": true
+    },
+    "repair": "Advisory only: this mode places or routes these relationships itself. Report them; do not remove relationships or meaning to reduce crossings."
+  }
+}
