@@ -226,6 +226,24 @@
     background: var(--cream);
     animation: blink 1.1s steps(1, end) infinite;
   }
+  /* Nom du joueur local dans la barre du haut. */
+  .pill .me {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--cream);
+  }
+  /* Petite couronne du vainqueur (doree, comme la piece O). */
+  .crown {
+    display: inline-flex;
+    width: 12px;
+    height: 12px;
+    flex: none;
+    color: var(--c-o);
+    vertical-align: -2px;
+  }
+  .crown svg { width: 100%; height: 100%; fill: currentColor; }
+  .pname .crown { width: 10px; height: 10px; margin-left: 3px; }
   main[data-state="live"] .pill { color: var(--cream); }
   main[data-state="live"] .pill .dot { background: var(--red-bright); animation: pulse 1.4s ease-in-out infinite; }
   main[data-state="over"] .pill .dot { background: var(--red); animation: none; }
@@ -755,7 +773,10 @@
     <div class="topbar">
       <span class="brand">Red Tetris</span>
       <h1 class="room"><span class="tag-room">Room</span><b>redzone</b></h1>
-      <p class="pill"><span class="dot" aria-hidden="true"></span><span id="pill-label">En cours</span></p>
+      <p class="pill">
+        <span class="me" id="me-name"></span>
+        <span class="dot" aria-hidden="true"></span><span id="pill-label">En cours</span>
+      </p>
     </div>
 
     <div class="stage">
@@ -879,10 +900,28 @@
      chocolat ; une case est pleine si son rang depuis le bas est
      inferieur a la hauteur de la colonne. */
   const OPPONENTS = [
-    { name: 'Momo',  out: false, heights: [14, 12, 15, 11, 16, 13, 17, 14, 12, 15] },
-    { name: 'Sacha', out: false, heights: [ 5,  7,  4,  8,  6,  3,  7,  5,  6,  4] },
-    { name: 'Kévin', out: true,  heights: [19, 20, 18, 20, 19, 20, 18, 20, 19, 20] }
+    { name: 'Momo',  out: false, winner: true, heights: [14, 12, 15, 11, 16, 13, 17, 14, 12, 15] },
+    { name: 'Sacha', out: false, winner: false, heights: [ 5,  7,  4,  8,  6,  3,  7,  5,  6,  4] },
+    { name: 'Kévin', out: true,  winner: false, heights: [19, 20, 18, 20, 19, 20, 18, 20, 19, 20] }
   ];
+
+  /* Joueur local (prototype). En vrai, nom et vainqueur viennent du
+     serveur : `winner` indique si c'est lui qui a gagne. */
+  const ME = { name: 'ellah', winner: false };
+
+  const CROWN =
+    '<span class="crown" role="img" aria-label="Vainqueur">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d="M3 8l4 3 5-6 5 6 4-3-2 9H5L3 8z"/>' +
+      '</svg>' +
+    '</span>';
+
+  /* La couronne est sur le joueur local s'il a gagne, sinon sur le
+     joueur qui a gagne. */
+  const WINNER = ME.winner ? ME : OPPONENTS.find(p => p.winner) || null;
+
+  document.getElementById('me-name').innerHTML =
+    ME.name + (ME.winner ? CROWN : '');
 
   const list = document.getElementById('players');
 
@@ -908,6 +947,9 @@
         '<div class="spec"><div class="spec-grid" role="img"></div><span class="ko"><b>Éliminé</b></span></div>' +
       '</div>';
     li.querySelector('.pname').textContent = p.name;
+    if (p === WINNER) {
+      li.querySelector('.pname').insertAdjacentHTML('beforeend', CROWN);
+    }
     const grid = li.querySelector('.spec-grid');
     grid.setAttribute('aria-label', 'Spectrum de ' + p.name);
     fillSpectrum(grid, p.heights);
