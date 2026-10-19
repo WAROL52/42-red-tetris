@@ -121,7 +121,10 @@
   /* min-height et non height : quand la scene est plus haute que
      l'ecran (petit viewport, 5e joueur...), le body grandit au lieu
      de centrer un contenu plus grand que lui — ce qui le rognerait
-     en haut et en bas, sans possibilite de scroller. */
+     en haut et en bas, sans possibilite de scroller.
+     min-height: 100vh/100dvh sur le body : sans hauteur definie, le
+     `min-height: 100%` du body ne se resolvait pas (html n'a qu'un
+     min-height) et le centrage vertical ne s'appliquait pas. */
   html, body { min-height: 100%; margin: 0; }
   body {
     background: #000;
@@ -133,8 +136,13 @@
     font-family: "Rubik", system-ui, sans-serif;
     font-weight: 900;
     color: var(--cream);
+    min-height: 100vh;
+    min-height: 100dvh;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    /* place-content centre le bloc entier haut-bas, place-items
+       centre le contenu dans sa piste. */
+    place-content: center;
     place-items: center;
     padding: 20px;
   }
@@ -152,7 +160,7 @@
     gap: 12px;
     margin-bottom: 16px;
     padding-bottom: 14px;
-    border-bottom: 4px solid var(--choco);
+    border-bottom: 4px solid var(--milk-light);
   }
 
   .brand {
@@ -185,19 +193,19 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Etiquette « Room » : simple libelle encadre d'un filet rouge,
+     sans aplat plein ni ombre portee. */
   .room .tag-room {
     flex: none;
-    font-size: .55rem;
-    letter-spacing: .18em;
-    color: var(--cream);
-    background: var(--red);
-    padding: 6px 9px 4px;
-    /* Ombre portee par filter et non par box-shadow : avec le clip-path,
-       l'ombre dure serait rognee (piege note sur .card dans la page
-       Rooms). drop-shadow suit en plus la forme biseautee. */
-    --cut: 6px;
-    clip-path: var(--notch);
-    filter: drop-shadow(3px 3px 0 var(--choco));
+    font-family: "Rubik", system-ui, sans-serif;
+    font-size: .58rem;
+    font-weight: 700;
+    letter-spacing: .24em;
+    text-transform: uppercase;
+    color: var(--cream-dim);
+    background: transparent;
+    border: 1px solid var(--red);
+    padding: 5px 8px 3px;
   }
 
   .pill {
@@ -642,14 +650,13 @@
     justify-content: center;
     gap: 10px 16px;
   }
-  .preview-label, .preview-hint {
+  .preview-label {
     font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
     font-size: .6rem;
     letter-spacing: .18em;
     text-transform: uppercase;
     color: var(--choco-3);
   }
-  .preview-hint { letter-spacing: .08em; text-transform: none; }
   .preview-group { display: flex; gap: 8px; }
 
   .chip {
@@ -861,7 +868,6 @@
         <button class="chip" type="button" data-host="true" aria-pressed="true">Host</button>
         <button class="chip" type="button" data-host="false" aria-pressed="false">Joueur</button>
       </div>
-      <span class="preview-hint">Clic sur un spectrum = eliminer / reintegrer</span>
     </div>
 
   </main>
