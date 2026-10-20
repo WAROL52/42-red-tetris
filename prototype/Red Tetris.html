@@ -10,15 +10,30 @@
     --red: #9b111e;
     --red-dark: #2b0a0f;
     --choco: #2a120a;
+    --choco-2: #4b2415;
     --cream: #fff1d6;
+    --cream-dim: #c9a882;
+    --cut: 6px;
+    --notch: polygon(
+      0 var(--cut),
+      var(--cut) var(--cut), var(--cut) 0,
+      calc(100% - var(--cut)) 0, calc(100% - var(--cut)) var(--cut),
+      100% var(--cut),
+      100% calc(100% - var(--cut)),
+      calc(100% - var(--cut)) calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      var(--cut) 100%, var(--cut) calc(100% - var(--cut)),
+      0 calc(100% - var(--cut))
+    );
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   *, *::before, *::after { box-sizing: inherit; }
 
-  html, body { height: 100%; margin: 0; }
+  html { height: 100%; }
   body {
+    min-height: 100%;
+    margin: 0;
     background: #000;
     background-image:
       linear-gradient(var(--red-dark) 2px, transparent 2px),
@@ -27,20 +42,27 @@
     font-family: "Rubik", system-ui, sans-serif;
     font-weight: 900;
     color: var(--cream);
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     padding: 24px;
   }
 
-  main { width: 100%; max-width: 420px; }
+  /* Meme gabarit que la carte des rooms : un carre centre, 680px max. */
+  main {
+    width: min(calc(100vw - 48px), max(340px, calc(100vh - 48px)), 680px);
+    min-width: 0;
+    margin: auto;
+    container-type: inline-size;
+  }
 
   h1 {
     font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
-    font-size: clamp(2.2rem, 11vw, 3.6rem);
+    font-size: clamp(2.4rem, 9cqw, 3.8rem);
     line-height: .95;
     text-transform: uppercase;
     text-align: center;
-    margin: 0 0 28px;
+    margin: 0;
     color: var(--cream);
     text-shadow: 5px 5px 0 var(--red);
   }
@@ -48,7 +70,13 @@
   /* La carte : tablette de chocolat entière */
   .card {
     position: relative;
-    padding: 36px 28px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 34px;
+    aspect-ratio: 1 / 1;
+    padding: 40px 48px;
     border: 5px solid var(--choco);
     border-radius: 6px;
     box-shadow: 10px 10px 0 var(--red);
@@ -64,7 +92,7 @@
     border-radius: 6px;
   }
 
-  form { display: grid; gap: 22px; }
+  form { display: grid; gap: 22px; width: 100%; }
 
   label { display: grid; gap: 8px; font-size: 1.05rem; }
 
@@ -72,6 +100,7 @@
     font: inherit;
     font-weight: 700;
     font-size: 1.1rem;
+    min-width: 0;
     color: var(--choco);
     background: var(--cream);
     border: 4px solid var(--choco);
@@ -98,6 +127,140 @@
   button:hover { background: #b8192a; }
   button:active { transform: translate(6px, 6px); box-shadow: 0 0 0 var(--choco); }
   button:focus-visible { outline: 4px solid var(--cream); outline-offset: 3px; }
+
+  /* Bouton « See rooms » : meme style que les filtres de la popup. */
+  .btn-see {
+    font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
+    font-size: clamp(.72rem, 1.1vw, .85rem);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--cream-dim);
+    background: transparent;
+    border: 3px solid var(--choco-2);
+    border-radius: 0;
+    padding: 8px 12px 6px;
+    box-shadow: none;
+    clip-path: var(--notch);
+    transition: color .1s, background .1s, border-color .1s;
+  }
+  .btn-see:hover {
+    color: var(--cream);
+    background: transparent;
+    border-color: var(--red);
+  }
+  .btn-see:active { transform: none; box-shadow: none; }
+
+  /* Le bouton de la carte se place dans le coin superieur droit. */
+  .card-see {
+    position: absolute;
+    top: 21px;
+    right: 21px;
+    z-index: 1;
+  }
+
+  /* Carte etroite : on resserre le titre et le formulaire pour qu'ils
+     tiennent dans le carre, comme la carte des rooms. */
+  @container (max-width: 620px) {
+    .card { gap: 18px; padding: 24px 26px; }
+    h1 { font-size: clamp(1.6rem, 8cqw, 2.4rem); text-shadow: 4px 4px 0 var(--red); }
+    form { gap: 14px; }
+    label { font-size: .95rem; gap: 5px; }
+    input { font-size: 1rem; padding: 9px 11px; border-width: 3px; }
+    button { font-size: 1rem; padding: 10px; border-width: 3px; box-shadow: 4px 4px 0 var(--choco); }
+    .card-see { top: 15px; right: 15px; }
+  }
+
+  @container (max-width: 410px) {
+    .card { gap: 10px; padding: 14px; }
+    h1 { font-size: clamp(1.2rem, 7cqw, 1.6rem); text-shadow: 3px 3px 0 var(--red); }
+    form { gap: 7px; }
+    label { font-size: .78rem; gap: 3px; }
+    input { font-size: .85rem; padding: 5px 7px; border-width: 2px; border-radius: 3px; }
+    button { font-size: .78rem; padding: 6px; border-width: 2px; border-radius: 3px; box-shadow: 3px 3px 0 var(--choco); }
+    .card-see { top: 8px; right: 9px; font-size: .66rem; padding: 5px 9px 3px; }
+  }
+
+  /* Carte minuscule : on reduit encore le bouton pour le garder dans
+     le coin sans toucher le titre. */
+  @container (max-width: 271px) {
+    .card-see { top: 5px; right: 5px; font-size: .58rem; line-height: 1; padding: 0 4px; border-width: 2px; }
+  }
+
+  /* Grande carte : tout le contenu suit la taille du carre, et le
+     formulaire occupe toute la largeur disponible. */
+  @container (min-width: 640px) {
+    .card { gap: 32px; }
+    h1 { font-size: clamp(3.4rem, 9cqw, 4.2rem); }
+    form { gap: 20px; }
+    label { font-size: 1.15rem; gap: 9px; }
+    input { font-size: 1.25rem; padding: 15px 16px; }
+    button { font-size: 1.45rem; padding: 16px; }
+  }
+
+  /* ================================================================
+     FENETRE « SEE ROOMS »
+     Voile + fenetre qui apparait et disparait en douceur. Le contenu
+     est la page des rooms chargee dans une iframe (?modal=1), qui
+     remplace « Create room » par « Fermer ».
+     ================================================================ */
+  body.modal-open { overflow: hidden; }
+
+  .rooms-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity .24s ease, visibility 0s linear .24s;
+  }
+  .rooms-modal.is-open {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity .24s ease;
+  }
+
+  .rooms-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 2, 4, .25);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    cursor: pointer;
+  }
+
+  .rooms-window {
+    position: relative;
+    width: min(94vw, calc(100dvh - 32px), 720px);
+    aspect-ratio: 1 / 1;
+    overflow: visible;
+    background: transparent;
+    opacity: 0;
+    transform: translateY(18px) scale(.965);
+    transition: opacity .2s ease, transform .3s cubic-bezier(.2, .8, .25, 1);
+  }
+  .rooms-modal.is-open .rooms-window {
+    opacity: 1;
+    transform: none;
+  }
+
+  .rooms-window iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    opacity: 0;
+    transition: opacity .28s ease .05s;
+  }
+  .rooms-window iframe.is-ready { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rooms-modal, .rooms-window, .rooms-window iframe { transition: none; }
+  }
 
   /* ================================================================
      CURSEURS TETRIS
@@ -145,8 +308,10 @@
 </head>
 <body>
   <main>
-    <h1>red<br>tetris</h1>
     <div class="card">
+      <button type="button" class="btn-see card-see" data-open-rooms
+              aria-haspopup="dialog" aria-controls="rooms-modal" aria-expanded="false">See rooms</button>
+      <h1>red<br>tetris</h1>
       <form onsubmit="event.preventDefault(); alert('Join : ' + room.value + ' / ' + player.value);">
         <label>Room
           <input id="room" name="room" type="text" placeholder="ex : room42" required autocomplete="off">
@@ -158,5 +323,62 @@
       </form>
     </div>
   </main>
+
+  <div class="rooms-modal" id="rooms-modal" inert>
+    <div class="rooms-backdrop" data-close aria-hidden="true"></div>
+    <div class="rooms-window" role="dialog" aria-modal="true" aria-label="Salles ouvertes">
+      <iframe id="rooms-frame" title="Salles ouvertes"
+              data-src="Red%20Tetris%20-%20Rooms.html?modal=1"></iframe>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const modal   = document.getElementById('rooms-modal');
+      const frame   = document.getElementById('rooms-frame');
+      const triggers = Array.from(document.querySelectorAll('[data-open-rooms]'));
+      const page    = document.querySelector('main');
+      let isOpen = false;
+      let lastTrigger = triggers[0] || null;
+
+      function openRooms(e) {
+        if (isOpen) return;
+        isOpen = true;
+        lastTrigger = e.currentTarget;
+        if (!frame.getAttribute('src')) frame.src = frame.dataset.src;
+        modal.inert = false;
+        modal.classList.add('is-open');
+        page.inert = true;
+        document.body.classList.add('modal-open');
+        triggers.forEach(t => t.setAttribute('aria-expanded', 'true'));
+        requestAnimationFrame(() => frame.focus());
+      }
+
+      function closeRooms() {
+        if (!isOpen) return;
+        isOpen = false;
+        modal.classList.remove('is-open');
+        modal.inert = true;
+        page.inert = false;
+        document.body.classList.remove('modal-open');
+        triggers.forEach(t => t.setAttribute('aria-expanded', 'false'));
+        if (lastTrigger) lastTrigger.focus();
+      }
+
+      triggers.forEach(t => t.addEventListener('click', openRooms));
+      modal.querySelector('[data-close]').addEventListener('click', closeRooms);
+
+      window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && isOpen) closeRooms();
+      });
+
+      /* Le bouton « Fermer » de la page des rooms previent son parent. */
+      window.addEventListener('message', e => {
+        if (e.data && e.data.type === 'rooms:close') closeRooms();
+      });
+
+      frame.addEventListener('load', () => frame.classList.add('is-ready'));
+    })();
+  </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Red Tetris — Available rooms</title>
+<title>Red Tetris — Rooms</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik+Mono+One&family=Rubik:wght@700;900&display=swap">
 <style>
   :root {
@@ -37,8 +37,10 @@
   }
   *, *::before, *::after { box-sizing: inherit; }
 
-  html, body { height: 100%; margin: 0; }
+  html { height: 100%; }
   body {
+    min-height: 100%;
+    margin: 0;
     background: #000;
     background-image:
       radial-gradient(circle at 50% -10%, rgba(155, 17, 30, .45), transparent 60%),
@@ -54,35 +56,23 @@
     padding: 24px;
   }
 
-  main { width: 100%; max-width: 560px; min-width: 0; }
-
-  h1 {
-    font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
-    font-size: clamp(2rem, 9vw, 3rem);
-    line-height: .95;
-    text-transform: uppercase;
-    text-align: center;
-    margin: 0 0 18px;
-    color: var(--cream);
-    text-shadow: 5px 5px 0 var(--red);
+  /* La carte est un carre centre : le cote suit le plus petit cote du
+     viewport (moins le padding du body), avec 340px de minimum pour
+     rester lisible ; au-dela de 680px elle ne grandit plus. */
+  main {
+    width: min(calc(100vw - 48px), max(340px, calc(100vh - 48px)), 680px);
+    min-width: 0;
   }
 
-  /* Bandeau de titre façon enseigne d'arcade */
-  .kicker {
-    display: block;
-    width: fit-content;
-    margin: 0 auto 26px;
-    font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
-    font-size: .82rem;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: var(--cream);
-    background: var(--red);
-    border: 4px solid var(--choco);
-    padding: 8px 16px 7px;
-    box-shadow: 5px 5px 0 var(--choco);
-    --cut: 6px;
-    clip-path: var(--notch);
+  /* Ouverte dans la fenetre « See rooms » (?modal=1) : on n'affiche
+     que la carte, sans le fond ni les marges de la page. Les 14px de
+     padding laissent respirer son ombre rouge. */
+  body.is-modal {
+    background: none;
+    padding: 14px;
+  }
+  body.is-modal main {
+    width: min(calc(100vw - 28px), calc(100dvh - 28px), 680px);
   }
 
   /* ================================================================
@@ -97,6 +87,9 @@
      ================================================================ */
   .card {
     position: relative;
+    display: grid;
+    aspect-ratio: 1 / 1;
+    container-type: inline-size;
     filter: drop-shadow(10px 10px 0 var(--red));
   }
   /* Cadre chocolat, angles biseayes : ils laissent voir le panneau */
@@ -111,11 +104,14 @@
   .panel {
     position: relative;
     margin: 5px;
+    min-height: 0;
+    overflow: hidden;
     clip-path: var(--notch);
     background:
       repeating-linear-gradient(rgba(255, 241, 214, .05) 0 2px, transparent 2px 6px),
       radial-gradient(circle at 50% 0%, #2f1219, #14070a 70%);
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 18px;
     padding: 26px 24px 24px;
   }
@@ -123,6 +119,7 @@
   /* Bandeau supérieur + ampoules qui défilent */
   .marquee {
     display: grid;
+    flex: none;
     grid-template-columns: 1fr auto;
     align-items: center;
     gap: 4px 14px;
@@ -159,13 +156,21 @@
     box-shadow: 4px 4px 0 var(--red);
   }
 
-  /* Filtres */
-  .filters { display: flex; flex-wrap: wrap; gap: 10px; }
+  /* Filtres : toujours sur une seule ligne, la carte etant assez large. */
+  .filters {
+    display: flex;
+    flex-wrap: nowrap;
+    flex: none;
+    gap: 10px;
+  }
   .chip {
     font-family: "Rubik Mono One", "Arial Black", Impact, sans-serif;
-    font-size: .72rem;
-    letter-spacing: .1em;
+    /* La taille suit la largeur du carre : les 3 filtres tiennent
+       toujours sur une seule ligne, meme dans une petite carte. */
+    font-size: min(.72rem, 1.75cqw);
+    letter-spacing: .08em;
     text-transform: uppercase;
+    white-space: nowrap;
     color: var(--cream-dim);
     background: transparent;
     border: 3px solid var(--choco-2);
@@ -186,6 +191,29 @@
   /* ================================================================
      LISTE DES ROOMS
      ================================================================ */
+  /* Seule cette zone defile : l'en-tete, les filtres et le pied
+     restent fixes dans la carte carree. Scrollbar chocolat/rouge. */
+  .scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    padding: 2px 14px 10px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--red) rgba(255, 241, 214, .08);
+  }
+  .scroll::-webkit-scrollbar { width: 12px; }
+  .scroll::-webkit-scrollbar-track {
+    background: rgba(255, 241, 214, .07);
+    border-left: 4px solid var(--choco);
+  }
+  .scroll::-webkit-scrollbar-thumb {
+    background: var(--red);
+    border: 3px solid var(--choco);
+  }
+  .scroll::-webkit-scrollbar-thumb:hover { background: var(--red-bright); }
+
   .rooms {
     list-style: none;
     margin: 0;
@@ -339,6 +367,7 @@
   /* Pied de carte */
   .foot {
     display: flex;
+    flex: none;
     gap: 14px;
     padding-top: 18px;
     border-top: 4px solid var(--choco);
@@ -397,6 +426,40 @@
     .join { justify-self: stretch; }
   }
 
+  /* Sous 520px : carte plus compacte (padding et gouttieres). */
+  @media (max-width: 520px) {
+    .panel { padding: 18px 14px 16px; gap: 14px; }
+    .scroll { padding-right: 10px; }
+  }
+
+  /* Carte etroite : filtres plus compacts pour tenir sur une ligne. */
+  @container (max-width: 400px) {
+    .filters { gap: 6px; }
+    .chip {
+      padding: 7px 8px 5px;
+      border-width: 2px;
+      letter-spacing: .04em;
+    }
+  }
+
+  /* Tres petite carte : on resserre l'habillage pour laisser le plus
+     de place possible a la liste (et donc au scroll). */
+  @container (max-width: 360px) {
+    .panel { padding: 12px 10px 10px; gap: 8px; }
+    .marquee { padding-bottom: 8px; gap: 2px 8px; }
+    .marquee h2 { font-size: .95rem; }
+    .count { font-size: .85rem; padding: 0 8px; box-shadow: 3px 3px 0 var(--red); }
+    .bulbs { height: 8px; background-size: 16px 100%; }
+    .foot { gap: 8px; padding-top: 10px; }
+    .foot button {
+      font-size: .72rem;
+      padding: 8px 10px 6px;
+      border-width: 3px;
+      box-shadow: 4px 4px 0 var(--choco);
+    }
+    .scroll { padding-right: 8px; }
+  }
+
   @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .15; } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
   @keyframes chase { to { background-position: 20px 0; } }
@@ -444,9 +507,6 @@
 </head>
 <body>
   <main>
-    <h1>red<br>tetris</h1>
-    <span class="kicker">Available rooms</span>
-
     <div class="card">
       <div class="panel">
 
@@ -462,7 +522,8 @@
           <button class="chip" type="button" data-filter="live" aria-pressed="false">En cours <b data-n></b></button>
         </div>
 
-        <ul class="rooms" id="rooms">
+        <div class="scroll">
+          <ul class="rooms" id="rooms">
           <li class="room" data-status="waiting" data-name="room42" data-players="2" data-max="4">
             <div class="room-content">
               <span class="glyph" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
@@ -556,6 +617,7 @@
         </ul>
 
         <p class="empty" id="empty">No room here</p>
+        </div>
 
         <div class="foot">
           <button class="btn-ghost" type="button" id="refresh">Refresh</button>
@@ -605,7 +667,30 @@
     alert(`${msg} : ${row.dataset.name} (${row.dataset.players}/${row.dataset.max} joueurs)`);
   });
 
-  document.getElementById('create').addEventListener('click', () => alert('Create room'));
+  /* Ouverte dans la fenetre « See rooms » (?modal=1), la page remplace
+     « Create room » par « Fermer » et previent son parent. */
+  const isModal = new URLSearchParams(location.search).has('modal');
+  const createBtn = document.getElementById('create');
+
+  function closeRooms() {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'rooms:close' }, '*');
+    } else {
+      window.close();
+    }
+  }
+
+  if (isModal) {
+    document.body.classList.add('is-modal');
+    createBtn.textContent = 'Fermer';
+    createBtn.addEventListener('click', closeRooms);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeRooms();
+    });
+  } else {
+    createBtn.addEventListener('click', () => alert('Create room'));
+  }
+
   document.getElementById('refresh').addEventListener('click', () => alert('Refresh : ' + rows.length + ' rooms'));
 </script>
 </body>
